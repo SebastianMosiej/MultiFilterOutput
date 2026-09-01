@@ -42,8 +42,6 @@ add_qtc_plugin(MultiFilterOutput
     src/linebuffer.cpp
     src/patternlibrary.h
     src/patternlibrary.cpp
-    src/patterneditdialog.h
-    src/patterneditdialog.cpp
     src/patternlibrarysettingspage.h
     src/patternlibrarysettingspage.cpp
     src/filtersetaspect.h

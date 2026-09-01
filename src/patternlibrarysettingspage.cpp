@@ -3,12 +3,20 @@
 #include "multifilteroutputconstants.h"
 #include "multifilteroutputtr.h"
 #include "pattern.h"
-#include "patterneditdialog.h"
 #include "patternlibrary.h"
 
+#include <utils/guiutils.h>
+
+#include <QCheckBox>
+#include <QColorDialog>
+#include <QFormLayout>
 #include <QHBoxLayout>
-#include <QListWidget>
+#include <QHeaderView>
+#include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -16,57 +24,74 @@ namespace MultiFilterOutput::Internal {
 
 namespace {
 
+enum Column { NameColumn, PatternColumn, RegexColumn, CaseColumn, InvertColumn, ColorColumn };
+
 class PatternLibraryWidget final : public Core::IOptionsPageWidget
 {
 public:
     PatternLibraryWidget()
         : m_workingPatterns(patternLibrary().patterns())
     {
-        m_list = new QListWidget(this);
-        refreshList();
+        m_tree = new QTreeWidget(this);
+        m_tree->setColumnCount(6);
+        m_tree->setHeaderLabels(
+            {Tr::tr("Name"), Tr::tr("Pattern"), Tr::tr("Regex"), Tr::tr("Case"),
+             Tr::tr("Invert"), Tr::tr("Color")});
+        m_tree->setRootIsDecorated(false);
+        m_tree->setUniformRowHeights(true);
+        m_tree->header()->setSectionResizeMode(NameColumn, QHeaderView::Stretch);
+        m_tree->header()->setSectionResizeMode(PatternColumn, QHeaderView::Stretch);
+        refreshTree();
 
-        auto *addButton = new QPushButton(Tr::tr("Add..."), this);
-        auto *editButton = new QPushButton(Tr::tr("Edit..."), this);
-        auto *removeButton = new QPushButton(Tr::tr("Remove"), this);
+        auto *addButton = new QPushButton(Tr::tr("Add"), this);
+        m_removeButton = new QPushButton(Tr::tr("Remove"), this);
+        m_removeButton->setEnabled(false);
 
-        connect(addButton, &QPushButton::clicked, this, [this] {
-            PatternEditDialog dialog(Pattern::createNew(), this);
-            if (dialog.exec() == QDialog::Accepted) {
-                upsert(dialog.result());
-                refreshList();
-            }
-        });
-        connect(editButton, &QPushButton::clicked, this, [this] {
-            QListWidgetItem *item = m_list->currentItem();
-            if (!item)
-                return;
-            const auto existing = patternAt(item->data(Qt::UserRole).toString());
-            if (!existing)
-                return;
-            PatternEditDialog dialog(*existing, this);
-            if (dialog.exec() == QDialog::Accepted) {
-                upsert(dialog.result());
-                refreshList();
-            }
-        });
-        connect(removeButton, &QPushButton::clicked, this, [this] {
-            QListWidgetItem *item = m_list->currentItem();
-            if (!item)
-                return;
-            const QString id = item->data(Qt::UserRole).toString();
-            m_workingPatterns.removeIf([&id](const Pattern &p) { return p.id == id; });
-            refreshList();
-        });
+        connect(addButton, &QPushButton::clicked, this, &PatternLibraryWidget::addPattern);
+        connect(m_removeButton, &QPushButton::clicked, this, &PatternLibraryWidget::removeSelected);
+        connect(m_tree, &QTreeWidget::currentItemChanged, this, &PatternLibraryWidget::selectItem);
 
-        auto *buttonLayout = new QVBoxLayout;
-        buttonLayout->addWidget(addButton);
-        buttonLayout->addWidget(editButton);
-        buttonLayout->addWidget(removeButton);
-        buttonLayout->addStretch();
+        auto *buttonColumn = new QVBoxLayout;
+        buttonColumn->addWidget(addButton);
+        buttonColumn->addWidget(m_removeButton);
+        buttonColumn->addStretch();
 
-        auto *layout = new QHBoxLayout(this);
-        layout->addWidget(m_list);
-        layout->addLayout(buttonLayout);
+        auto *topRow = new QHBoxLayout;
+        topRow->addWidget(m_tree);
+        topRow->addLayout(buttonColumn);
+
+        // The detail panel below is always visible (Kits-style) rather than a modal dialog:
+        // selecting a row loads it here, and edits apply live -- see fieldEdited().
+        m_nameEdit = new QLineEdit(this);
+        m_patternEdit = new QLineEdit(this);
+        m_regexCheck = new QCheckBox(Tr::tr("Regular expression"), this);
+        m_caseSensitiveCheck = new QCheckBox(Tr::tr("Case sensitive"), this);
+        m_invertCheck = new QCheckBox(Tr::tr("Exclude matching lines (invert)"), this);
+        m_colorButton = new QPushButton(Tr::tr("Choose..."), this);
+        m_errorLabel = new QLabel(this);
+        m_errorLabel->setStyleSheet("color: red;");
+
+        connect(m_nameEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
+        connect(m_patternEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
+        connect(m_regexCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
+        connect(m_caseSensitiveCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
+        connect(m_invertCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
+        connect(m_colorButton, &QPushButton::clicked, this, &PatternLibraryWidget::pickColor);
+
+        auto *form = new QFormLayout;
+        form->addRow(Tr::tr("Name:"), m_nameEdit);
+        form->addRow(Tr::tr("Pattern:"), m_patternEdit);
+        form->addRow(m_regexCheck);
+        form->addRow(m_caseSensitiveCheck);
+        form->addRow(m_invertCheck);
+        form->addRow(Tr::tr("Tab color:"), m_colorButton);
+        form->addRow(m_errorLabel);
+
+        auto *layout = new QVBoxLayout(this);
+        layout->addLayout(topRow);
+        layout->addLayout(form);
+
+        setFieldsEnabled(false);
     }
 
     // Add/Edit/Remove only ever touch the working copy, so dismissing the Options dialog
@@ -79,13 +104,43 @@ public:
     }
 
 private:
-    void refreshList()
+    void refreshTree()
     {
-        m_list->clear();
-        for (const Pattern &p : std::as_const(m_workingPatterns)) {
-            auto *item = new QListWidgetItem(p.name, m_list);
-            item->setData(Qt::UserRole, p.id);
+        m_tree->clear();
+        for (const Pattern &p : std::as_const(m_workingPatterns))
+            m_tree->addTopLevelItem(makeItem(p));
+    }
+
+    QTreeWidgetItem *makeItem(const Pattern &p) const
+    {
+        auto *item = new QTreeWidgetItem;
+        item->setData(NameColumn, Qt::UserRole, p.id);
+        fillItem(item, p);
+        return item;
+    }
+
+    void fillItem(QTreeWidgetItem *item, const Pattern &p) const
+    {
+        static const QString checkMark = QString::fromUtf8("\xE2\x9C\x93");
+
+        item->setText(NameColumn, p.name);
+        item->setText(PatternColumn, p.patternText);
+        item->setText(RegexColumn, p.isRegex ? checkMark : QString());
+        item->setText(CaseColumn, p.caseSensitive ? checkMark : QString());
+        item->setText(InvertColumn, p.invert ? checkMark : QString());
+        for (int column : {RegexColumn, CaseColumn, InvertColumn, ColorColumn})
+            item->setTextAlignment(column, Qt::AlignCenter);
+        item->setBackground(ColorColumn, p.color);
+    }
+
+    QTreeWidgetItem *itemForId(const QString &id) const
+    {
+        for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+            QTreeWidgetItem *item = m_tree->topLevelItem(i);
+            if (item->data(NameColumn, Qt::UserRole).toString() == id)
+                return item;
         }
+        return nullptr;
     }
 
     std::optional<Pattern> patternAt(const QString &id) const
@@ -97,19 +152,145 @@ private:
         return std::nullopt;
     }
 
-    void upsert(const Pattern &pattern)
+    void setFieldsEnabled(bool enabled)
     {
-        for (Pattern &existing : m_workingPatterns) {
-            if (existing.id == pattern.id) {
-                existing = pattern;
-                return;
-            }
-        }
-        m_workingPatterns.append(pattern);
+        m_nameEdit->setEnabled(enabled);
+        m_patternEdit->setEnabled(enabled);
+        m_regexCheck->setEnabled(enabled);
+        m_caseSensitiveCheck->setEnabled(enabled);
+        m_invertCheck->setEnabled(enabled);
+        m_colorButton->setEnabled(enabled);
+        m_removeButton->setEnabled(enabled);
     }
 
-    QListWidget *m_list;
+    void addPattern()
+    {
+        const Pattern fresh = Pattern::createNew();
+        m_workingPatterns.append(fresh);
+        m_tree->addTopLevelItem(makeItem(fresh));
+        m_tree->setCurrentItem(m_tree->topLevelItem(m_tree->topLevelItemCount() - 1));
+        m_nameEdit->setFocus();
+        m_nameEdit->selectAll();
+        Utils::markSettingsDirty();
+    }
+
+    void removeSelected()
+    {
+        QTreeWidgetItem *item = m_tree->currentItem();
+        if (!item)
+            return;
+        const QString id = item->data(NameColumn, Qt::UserRole).toString();
+        m_workingPatterns.removeIf([&id](const Pattern &p) { return p.id == id; });
+        delete item;
+        Utils::markSettingsDirty();
+    }
+
+    void selectItem(QTreeWidgetItem *current)
+    {
+        if (!current) {
+            m_currentId.clear();
+            m_updatingFields = true;
+            m_nameEdit->clear();
+            m_patternEdit->clear();
+            m_regexCheck->setChecked(false);
+            m_caseSensitiveCheck->setChecked(false);
+            m_invertCheck->setChecked(false);
+            m_currentColor = QColor(Qt::gray);
+            updateColorButton();
+            m_errorLabel->clear();
+            m_updatingFields = false;
+            setFieldsEnabled(false);
+            return;
+        }
+
+        const QString id = current->data(NameColumn, Qt::UserRole).toString();
+        const auto pattern = patternAt(id);
+        if (!pattern)
+            return;
+
+        m_currentId = id;
+        m_currentColor = pattern->color;
+        m_updatingFields = true;
+        m_nameEdit->setText(pattern->name);
+        m_patternEdit->setText(pattern->patternText);
+        m_regexCheck->setChecked(pattern->isRegex);
+        m_caseSensitiveCheck->setChecked(pattern->caseSensitive);
+        m_invertCheck->setChecked(pattern->invert);
+        updateColorButton();
+        m_errorLabel->clear();
+        m_updatingFields = false;
+        setFieldsEnabled(true);
+    }
+
+    void updateColorButton()
+    {
+        m_colorButton->setStyleSheet(
+            QStringLiteral("background-color: %1;").arg(m_currentColor.name()));
+    }
+
+    void pickColor()
+    {
+        const QColor chosen = QColorDialog::getColor(m_currentColor, this, Tr::tr("Choose Tab Color"));
+        if (!chosen.isValid())
+            return;
+        m_currentColor = chosen;
+        updateColorButton();
+        fieldEdited();
+    }
+
+    // Validates the in-progress edit and, only if valid, writes it back into the working
+    // copy and refreshes the tree row -- an invalid regex (or empty pattern text) stays a
+    // draft in the form fields, matching the old dialog's "OK disabled until valid"
+    // behavior without a modal to gate.
+    void fieldEdited()
+    {
+        if (m_updatingFields || m_currentId.isEmpty())
+            return;
+
+        const QString text = m_patternEdit->text();
+        bool valid = !text.isEmpty();
+        if (valid && m_regexCheck->isChecked())
+            valid = QRegularExpression(text).isValid();
+
+        m_errorLabel->setText(
+            valid ? QString() : Tr::tr("Pattern is empty or not a valid regular expression."));
+        if (!valid)
+            return;
+
+        Pattern updated;
+        updated.id = m_currentId;
+        updated.name = m_nameEdit->text();
+        updated.patternText = text;
+        updated.isRegex = m_regexCheck->isChecked();
+        updated.caseSensitive = m_caseSensitiveCheck->isChecked();
+        updated.invert = m_invertCheck->isChecked();
+        updated.color = m_currentColor;
+
+        for (Pattern &existing : m_workingPatterns) {
+            if (existing.id == updated.id) {
+                existing = updated;
+                break;
+            }
+        }
+        if (QTreeWidgetItem *item = itemForId(m_currentId))
+            fillItem(item, updated);
+
+        Utils::markSettingsDirty();
+    }
+
+    QTreeWidget *m_tree;
+    QLineEdit *m_nameEdit;
+    QLineEdit *m_patternEdit;
+    QCheckBox *m_regexCheck;
+    QCheckBox *m_caseSensitiveCheck;
+    QCheckBox *m_invertCheck;
+    QPushButton *m_colorButton;
+    QLabel *m_errorLabel;
+    QPushButton *m_removeButton;
     QList<Pattern> m_workingPatterns;
+    QString m_currentId;
+    QColor m_currentColor = QColor(Qt::gray);
+    bool m_updatingFields = false;
 };
 
 } // namespace
