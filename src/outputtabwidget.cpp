@@ -4,6 +4,9 @@
 
 #include <coreplugin/editormanager/editormanager.h>
 
+#include <texteditor/fontsettings.h>
+#include <texteditor/texteditorsettings.h>
+
 #include <utils/link.h>
 
 #include <QMouseEvent>
@@ -18,6 +21,15 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
     setReadOnly(true);
     setMaximumBlockCount(50000);
     m_formatter.setPlainTextEdit(this);
+
+    // Match Application Output's font, including live updates when the user changes it in
+    // Preferences > Text Editor > Font & Colors -- Core::OutputWindow follows the same setting.
+    setFont(TextEditor::TextEditorSettings::fontSettings().font());
+    connect(
+        TextEditor::TextEditorSettings::instance(),
+        &TextEditor::TextEditorSettings::fontSettingsChanged,
+        this,
+        [this] { setFont(TextEditor::TextEditorSettings::fontSettings().font()); });
 
     // An absolute "file://" link is resolved by OutputFormatter itself (see
     // Utils::OutputFormatter::handleFileLink()) rather than being forwarded to the line

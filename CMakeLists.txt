@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(QtCreator REQUIRED COMPONENTS Core ProjectExplorer)
+find_package(QtCreator REQUIRED COMPONENTS Core ProjectExplorer TextEditor)
 find_package(Qt6 COMPONENTS Widgets REQUIRED)
 
 option(WITH_TESTS "Builds with tests" NO)
@@ -24,6 +24,7 @@ add_qtc_plugin(MultiFilterOutput
   PLUGIN_DEPENDS
     QtCreator::Core
     QtCreator::ProjectExplorer
+    QtCreator::TextEditor
   DEPENDS
     Qt::Widgets
     QtCreator::ExtensionSystem
