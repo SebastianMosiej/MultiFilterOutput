@@ -99,6 +99,16 @@ public:
         placementLayout->addWidget(atEndRadio);
         placementLayout->addStretch();
 
+        auto *jumpToAllCheck = new QCheckBox(
+            Tr::tr("Clicking a line in a pattern tab jumps to it in the All tab"), this);
+        jumpToAllCheck->setChecked(outputPaneSettings().jumpToAllOnClick());
+        // Also persists immediately, like the placement radio buttons above -- but takes
+        // effect on the very next click, no restart needed: FilteredOutputPane::
+        // onJumpRequested() just reads the current value each time a jump is requested.
+        connect(jumpToAllCheck, &QCheckBox::toggled, this, [](bool checked) {
+            outputPaneSettings().setJumpToAllOnClick(checked);
+        });
+
         m_tree = new PatternTreeWidget(this);
         m_tree->setColumnCount(6);
         m_tree->setHeaderLabels(
@@ -197,6 +207,7 @@ public:
 
         auto *layout = new QVBoxLayout(this);
         layout->addWidget(placementGroup);
+        layout->addWidget(jumpToAllCheck);
         layout->addLayout(topRow);
         layout->addLayout(form);
 

@@ -171,6 +171,8 @@ void FilteredOutputPane::onJumpRequested(int sourceBlockNumber)
 {
     if (!m_tabWidget || !m_allTab || sourceBlockNumber < 0)
         return;
+    if (!outputPaneSettings().jumpToAllOnClick())
+        return;
     // Switching to the "All" tab is half the point: scrolling a tab the user cannot see
     // looks like nothing happened at all.
     m_tabWidget->setCurrentWidget(m_allTab);
