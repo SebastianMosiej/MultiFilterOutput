@@ -16,6 +16,9 @@ private slots:
     void invertFlipsResult();
     void invalidRegexFailsSafe();
     void repeatedCallsStayConsistent();
+    void continuationOffByDefault();
+    void continuationMatchesLeadingWhitespace();
+    void continuationInvalidRegexFailsSafe();
 };
 
 void tst_LineMatcher::plainTextMatchCaseInsensitiveByDefault()
@@ -96,6 +99,38 @@ void tst_LineMatcher::repeatedCallsStayConsistent()
         QVERIFY(!lineMatches(sensitive, "some error here"));
         QVERIFY(lineMatches(sensitive, "some ERROR here"));
     }
+}
+
+void tst_LineMatcher::continuationOffByDefault()
+{
+    // groupContinuationLines defaults to false, so lineContinuesPattern() must never sweep a
+    // line in just because it happens to match continuationPattern's default text.
+    Pattern p;
+    p.continuationPattern = "^ {1,3}";
+
+    QVERIFY(!lineContinuesPattern(p, "  indented line"));
+}
+
+void tst_LineMatcher::continuationMatchesLeadingWhitespace()
+{
+    Pattern p;
+    p.groupContinuationLines = true;
+    p.continuationPattern = "^ {1,3}";
+
+    QVERIFY(lineContinuesPattern(p, "  18 |       { \"wait\": \"...\" },"));
+    // Matches even with many more leading spaces than the {1,3} count requires: the regex
+    // only needs to find 1-3 at the start to succeed, not exactly that many total.
+    QVERIFY(lineContinuesPattern(p, "                              ^"));
+    QVERIFY(!lineContinuesPattern(p, "[quickautomation][INFO]: next entry"));
+}
+
+void tst_LineMatcher::continuationInvalidRegexFailsSafe()
+{
+    Pattern p;
+    p.groupContinuationLines = true;
+    p.continuationPattern = "([unterminated";
+
+    QVERIFY(!lineContinuesPattern(p, "anything at all"));
 }
 
 QTEST_GUILESS_MAIN(tst_LineMatcher)

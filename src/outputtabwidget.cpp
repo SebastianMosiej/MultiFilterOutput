@@ -50,7 +50,7 @@ void OutputTabWidget::setLinkParser(ProjectExplorer::Project *project)
 }
 
 int OutputTabWidget::appendLine(
-    const QString &line, Utils::OutputFormat format, int sourceBlockNumber)
+    const QString &line, Utils::OutputFormat format, int sourceBlockNumber, bool countsAsMatch)
 {
     m_formatter.appendMessage(line + "\n", format);
     // appendMessage's trailing newline advances the cursor into a new, still-empty block, so
@@ -65,8 +65,10 @@ int OutputTabWidget::appendLine(
     if (cap > 0 && m_sourceBlockNumbers.size() > cap)
         m_sourceBlockNumbers.remove(0, m_sourceBlockNumbers.size() - cap);
 
-    ++m_matchCount;
-    emit matchCountChanged(m_matchCount);
+    if (countsAsMatch) {
+        ++m_matchCount;
+        emit matchCountChanged(m_matchCount);
+    }
     return myBlock;
 }
 

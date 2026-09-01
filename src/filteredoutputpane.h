@@ -6,7 +6,6 @@
 #include <coreplugin/ioutputpane.h>
 
 #include <QList>
-#include <QPair>
 
 QT_BEGIN_NAMESPACE
 class QLabel;
@@ -52,11 +51,21 @@ private:
     // own wheelEvent() changes it.
     void onTabZoomChanged(qreal zoom);
 
+    struct PatternTab
+    {
+        Pattern pattern;
+        OutputTabWidget *tab;
+        // True while lines are being swept in as continuations of this pattern's last match
+        // (see Pattern::groupContinuationLines); cleared by the first line that doesn't
+        // match pattern.continuationPattern.
+        bool inContinuation = false;
+    };
+
     RunTracker *m_runTracker;
     QWidget *m_container = nullptr;
     QTabWidget *m_tabWidget = nullptr;
     OutputTabWidget *m_allTab = nullptr;
-    QList<QPair<Pattern, OutputTabWidget *>> m_patternTabs;
+    QList<PatternTab> m_patternTabs;
     QLabel *m_runLabel = nullptr;
     qreal m_fontZoom = 0;
 };

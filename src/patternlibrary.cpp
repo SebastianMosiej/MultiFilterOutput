@@ -67,6 +67,12 @@ void PatternLibrary::load()
         map.insert("caseSensitive", settings->value("caseSensitive"));
         map.insert("invert", settings->value("invert"));
         map.insert("color", settings->value("color"));
+        // Left unset (rather than inserted with a null QVariant) for patterns saved before
+        // this field existed, so fromMap()'s own default applies instead of an empty string.
+        if (settings->contains("groupContinuationLines"))
+            map.insert("groupContinuationLines", settings->value("groupContinuationLines"));
+        if (settings->contains("continuationPattern"))
+            map.insert("continuationPattern", settings->value("continuationPattern"));
         m_patterns.append(Pattern::fromMap(map));
     }
     settings->endArray();
@@ -92,6 +98,8 @@ void PatternLibrary::save() const
         settings->setValue("caseSensitive", map.value("caseSensitive"));
         settings->setValue("invert", map.value("invert"));
         settings->setValue("color", map.value("color"));
+        settings->setValue("groupContinuationLines", map.value("groupContinuationLines"));
+        settings->setValue("continuationPattern", map.value("continuationPattern"));
     }
     settings->endArray();
 

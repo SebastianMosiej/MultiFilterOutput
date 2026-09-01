@@ -22,6 +22,8 @@ QVariantMap Pattern::toMap() const
         {"caseSensitive", caseSensitive},
         {"invert", invert},
         {"color", color},
+        {"groupContinuationLines", groupContinuationLines},
+        {"continuationPattern", continuationPattern},
     };
 }
 
@@ -35,6 +37,8 @@ Pattern Pattern::fromMap(const QVariantMap &map)
     p.caseSensitive = map.value("caseSensitive", false).toBool();
     p.invert = map.value("invert", false).toBool();
     p.color = map.value("color", QColor(Qt::gray)).value<QColor>();
+    p.groupContinuationLines = map.value("groupContinuationLines", false).toBool();
+    p.continuationPattern = map.value("continuationPattern", QStringLiteral("^ {1,3}")).toString();
     return p;
 }
 

@@ -81,11 +81,11 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     if (!m_tabWidget)
         return;
 
-    for (const auto &pair : std::as_const(m_patternTabs)) {
-        const int index = m_tabWidget->indexOf(pair.second);
+    for (const PatternTab &entry : std::as_const(m_patternTabs)) {
+        const int index = m_tabWidget->indexOf(entry.tab);
         if (index != -1)
             m_tabWidget->removeTab(index);
-        pair.second->deleteLater();
+        entry.tab->deleteLater();
     }
     m_patternTabs.clear();
     // reset(), not clear(): the inherited QPlainTextEdit::clear() leaves the match count,
@@ -144,8 +144,8 @@ void FilteredOutputPane::onTabZoomChanged(qreal zoom)
 
     if (m_allTab)
         m_allTab->setFontZoom(zoom);
-    for (const auto &pair : std::as_const(m_patternTabs))
-        pair.second->setFontZoom(zoom);
+    for (const PatternTab &entry : std::as_const(m_patternTabs))
+        entry.tab->setFontZoom(zoom);
 
     Utils::QtcSettings *settings = Core::ICore::settings();
     settings->beginGroup(Constants::SETTINGS_GROUP);
@@ -186,9 +186,21 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
     // matching pattern tab must record -- not each tab's own (identity) block index.
     const int allBlock = m_allTab->appendLine(line, format);
 
-    for (const auto &pair : std::as_const(m_patternTabs)) {
-        if (lineMatches(pair.first, line))
-            pair.second->appendLine(line, format, allBlock);
+    for (PatternTab &entry : m_patternTabs) {
+        if (entry.inContinuation) {
+            if (lineContinuesPattern(entry.pattern, line)) {
+                entry.tab->appendLine(line, format, allBlock, /*countsAsMatch=*/false);
+                continue;
+            }
+            // This line breaks the continuation run; fall through and re-check it as an
+            // ordinary candidate match below, same as any other line.
+            entry.inContinuation = false;
+        }
+        if (lineMatches(entry.pattern, line)) {
+            entry.tab->appendLine(line, format, allBlock);
+            entry.inContinuation = entry.pattern.groupContinuationLines
+                                    && !entry.pattern.continuationPattern.isEmpty();
+        }
     }
 }
 
@@ -196,8 +208,10 @@ void FilteredOutputPane::clearContents()
 {
     if (m_allTab)
         m_allTab->reset();
-    for (const auto &pair : std::as_const(m_patternTabs))
-        pair.second->reset();
+    for (PatternTab &entry : m_patternTabs) {
+        entry.tab->reset();
+        entry.inContinuation = false;
+    }
 }
 
 void FilteredOutputPane::setFocus()

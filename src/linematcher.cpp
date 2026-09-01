@@ -53,4 +53,18 @@ bool lineMatches(const Pattern &pattern, const QString &line)
     return matched != pattern.invert;
 }
 
+bool lineContinuesPattern(const Pattern &pattern, const QString &line)
+{
+    if (!pattern.groupContinuationLines || pattern.continuationPattern.isEmpty())
+        return false;
+
+    // Always a regex, unlike the main pattern -- a "starts with" structural check has no
+    // sensible plain-substring reading. An invalid regex (e.g. hand-edited settings) never
+    // continues, same fail-safe as an invalid main pattern.
+    const QRegularExpression &re = compiledRegex(pattern.continuationPattern, pattern.caseSensitive);
+    if (!re.isValid())
+        return false;
+    return re.match(line).hasMatch();
+}
+
 } // namespace MultiFilterOutput

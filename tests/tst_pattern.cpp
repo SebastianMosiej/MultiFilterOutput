@@ -11,6 +11,7 @@ class tst_Pattern : public QObject
 private slots:
     void roundTripsThroughMap();
     void createNewGeneratesUniqueIds();
+    void continuationFieldsDefaultAndRoundTrip();
 };
 
 void tst_Pattern::roundTripsThroughMap()
@@ -33,6 +34,22 @@ void tst_Pattern::roundTripsThroughMap()
     QCOMPARE(restored.caseSensitive, p.caseSensitive);
     QCOMPARE(restored.invert, p.invert);
     QCOMPARE(restored.color, p.color);
+}
+
+void tst_Pattern::continuationFieldsDefaultAndRoundTrip()
+{
+    // A freshly constructed Pattern (e.g. from createNew()) has continuation grouping off,
+    // but a sensible default pattern already filled in for whenever it's turned on.
+    QCOMPARE(Pattern().groupContinuationLines, false);
+    QCOMPARE(Pattern().continuationPattern, QStringLiteral("^ {1,3}"));
+
+    Pattern p;
+    p.groupContinuationLines = true;
+    p.continuationPattern = "^\\t";
+
+    const Pattern restored = Pattern::fromMap(p.toMap());
+    QCOMPARE(restored.groupContinuationLines, p.groupContinuationLines);
+    QCOMPARE(restored.continuationPattern, p.continuationPattern);
 }
 
 void tst_Pattern::createNewGeneratesUniqueIds()

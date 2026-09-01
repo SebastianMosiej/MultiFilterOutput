@@ -9,6 +9,7 @@
 #include <coreplugin/icore.h>
 
 #include <utils/guiutils.h>
+#include <utils/utilsicons.h>
 
 #include <QAbstractItemView>
 #include <QCheckBox>
@@ -145,16 +146,43 @@ public:
         m_regexCheck = new QCheckBox(Tr::tr("Regular expression"), this);
         m_caseSensitiveCheck = new QCheckBox(Tr::tr("Case sensitive"), this);
         m_invertCheck = new QCheckBox(Tr::tr("Exclude matching lines (invert)"), this);
+        m_groupContinuationCheck = new QCheckBox(Tr::tr("Group continuation lines"), this);
+        m_continuationPatternEdit = new QLineEdit(Pattern().continuationPattern, this);
         m_colorButton = new QPushButton(Tr::tr("Choose..."), this);
         m_errorLabel = new QLabel(this);
         m_errorLabel->setStyleSheet("color: red;");
+
+        auto *continuationInfoLabel = new QLabel(this);
+        continuationInfoLabel->setPixmap(Utils::Icons::INFO.pixmap());
+        continuationInfoLabel->setToolTip(
+            Tr::tr("<p>Sweeps any line matching the pattern below into this tab, even though "
+                   "it doesn't match the pattern above.</p>"
+                   "<p>Useful for multi-line entries -- e.g. an error followed by an indented "
+                   "stack trace or file excerpt.</p>"
+                   "<p>Stops as soon as a line no longer matches the continuation pattern; "
+                   "that line is then checked normally against every pattern.</p>"
+                   "<p>Swept-in lines don't count toward this tab's match count -- only the "
+                   "line that actually matched the pattern above does.</p>"
+                   "<p>Leave unchecked for patterns whose matches are always single lines.</p>"));
 
         connect(m_nameEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
         connect(m_patternEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
         connect(m_regexCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_caseSensitiveCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_invertCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
+        connect(m_groupContinuationCheck, &QCheckBox::toggled, this, [this](bool) {
+            updateContinuationFieldEnabled();
+            fieldEdited();
+        });
+        connect(
+            m_continuationPatternEdit, &QLineEdit::textChanged, this,
+            &PatternLibraryWidget::fieldEdited);
         connect(m_colorButton, &QPushButton::clicked, this, &PatternLibraryWidget::pickColor);
+
+        auto *continuationCheckRow = new QHBoxLayout;
+        continuationCheckRow->addWidget(m_groupContinuationCheck);
+        continuationCheckRow->addWidget(continuationInfoLabel);
+        continuationCheckRow->addStretch();
 
         auto *form = new QFormLayout;
         form->addRow(Tr::tr("Name:"), m_nameEdit);
@@ -162,6 +190,8 @@ public:
         form->addRow(m_regexCheck);
         form->addRow(m_caseSensitiveCheck);
         form->addRow(m_invertCheck);
+        form->addRow(continuationCheckRow);
+        form->addRow(Tr::tr("Continuation line starts with:"), m_continuationPatternEdit);
         form->addRow(Tr::tr("Tab color:"), m_colorButton);
         form->addRow(m_errorLabel);
 
@@ -254,8 +284,18 @@ private:
         m_regexCheck->setEnabled(enabled);
         m_caseSensitiveCheck->setEnabled(enabled);
         m_invertCheck->setEnabled(enabled);
+        m_groupContinuationCheck->setEnabled(enabled);
         m_colorButton->setEnabled(enabled);
         m_removeButton->setEnabled(enabled);
+        updateContinuationFieldEnabled();
+    }
+
+    // The continuation-pattern field is only meaningfully editable when a pattern is selected
+    // AND that pattern's "Group continuation lines" checkbox is on.
+    void updateContinuationFieldEnabled()
+    {
+        m_continuationPatternEdit->setEnabled(
+            m_groupContinuationCheck->isEnabled() && m_groupContinuationCheck->isChecked());
     }
 
     void updateMoveButtons()
@@ -337,6 +377,8 @@ private:
             m_regexCheck->setChecked(false);
             m_caseSensitiveCheck->setChecked(false);
             m_invertCheck->setChecked(false);
+            m_groupContinuationCheck->setChecked(false);
+            m_continuationPatternEdit->setText(Pattern().continuationPattern);
             m_currentColor = QColor(Qt::gray);
             updateColorButton();
             m_errorLabel->clear();
@@ -359,6 +401,8 @@ private:
         m_regexCheck->setChecked(pattern->isRegex);
         m_caseSensitiveCheck->setChecked(pattern->caseSensitive);
         m_invertCheck->setChecked(pattern->invert);
+        m_groupContinuationCheck->setChecked(pattern->groupContinuationLines);
+        m_continuationPatternEdit->setText(pattern->continuationPattern);
         updateColorButton();
         m_errorLabel->clear();
         m_updatingFields = false;
@@ -396,8 +440,18 @@ private:
         if (valid && m_regexCheck->isChecked())
             valid = QRegularExpression(text).isValid();
 
-        m_errorLabel->setText(
-            valid ? QString() : Tr::tr("Pattern is empty or not a valid regular expression."));
+        QString error;
+        if (!valid) {
+            error = Tr::tr("Pattern is empty or not a valid regular expression.");
+        } else if (m_groupContinuationCheck->isChecked()) {
+            const QString continuationText = m_continuationPatternEdit->text();
+            if (continuationText.isEmpty() || !QRegularExpression(continuationText).isValid()) {
+                valid = false;
+                error = Tr::tr("Continuation pattern is empty or not a valid regular expression.");
+            }
+        }
+
+        m_errorLabel->setText(error);
         if (!valid)
             return;
 
@@ -408,6 +462,8 @@ private:
         updated.isRegex = m_regexCheck->isChecked();
         updated.caseSensitive = m_caseSensitiveCheck->isChecked();
         updated.invert = m_invertCheck->isChecked();
+        updated.groupContinuationLines = m_groupContinuationCheck->isChecked();
+        updated.continuationPattern = m_continuationPatternEdit->text();
         updated.color = m_currentColor;
 
         for (Pattern &existing : m_workingPatterns) {
@@ -428,6 +484,8 @@ private:
     QCheckBox *m_regexCheck;
     QCheckBox *m_caseSensitiveCheck;
     QCheckBox *m_invertCheck;
+    QCheckBox *m_groupContinuationCheck;
+    QLineEdit *m_continuationPatternEdit;
     QPushButton *m_colorButton;
     QLabel *m_errorLabel;
     QPushButton *m_removeButton;

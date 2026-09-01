@@ -36,8 +36,12 @@ public:
     // sourceBlockNumber argument on the subsequent calls that mirror this same line into
     // other tabs. The "All" tab is appended to first with no sourceBlockNumber (it is its
     // own source); each matching pattern tab is then given the number "All" returned, so a
-    // click in a pattern tab can be mapped back to the right line of "All".
-    int appendLine(const QString &line, Utils::OutputFormat format, int sourceBlockNumber = -1);
+    // click in a pattern tab can be mapped back to the right line of "All". countsAsMatch is
+    // false for a continuation line swept in alongside a real match (see
+    // FilteredOutputPane::onLineReceived) -- it's still shown, just not counted.
+    int appendLine(
+        const QString &line, Utils::OutputFormat format, int sourceBlockNumber = -1,
+        bool countsAsMatch = true);
 
     int matchCount() const;
 
