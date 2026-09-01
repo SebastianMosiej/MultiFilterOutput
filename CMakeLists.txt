@@ -54,6 +54,8 @@ add_qtc_plugin(MultiFilterOutput
     src/multifilterlineparser.cpp
     src/outputtabwidget.h
     src/outputtabwidget.cpp
+    src/runtracker.h
+    src/runtracker.cpp
 )
 
 target_include_directories(MultiFilterOutput PRIVATE src)
