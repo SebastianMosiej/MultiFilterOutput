@@ -10,5 +10,6 @@
     "Description" : "Filters the active run's Application Output into tabs by user-defined text/regex patterns.",
     "Url" : "",
     "DocumentationUrl" : "",
+    "DisabledByDefault" : true,
     ${IDE_PLUGIN_DEPENDENCIES}
 }
