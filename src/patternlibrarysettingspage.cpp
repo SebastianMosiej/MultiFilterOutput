@@ -7,8 +7,10 @@
 
 #include <utils/guiutils.h>
 
+#include <QAbstractItemView>
 #include <QCheckBox>
 #include <QColorDialog>
+#include <QDropEvent>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -20,11 +22,32 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <functional>
+
 namespace MultiFilterOutput::Internal {
 
 namespace {
 
 enum Column { NameColumn, PatternColumn, RegexColumn, CaseColumn, InvertColumn, ColorColumn };
+
+// QTreeWidget's internal-move drag-and-drop reorders items without a documented, reliable
+// signal to hook (rowsMoved isn't guaranteed for internal moves). Overriding dropEvent lets
+// us react right after the base class has already applied the reorder to the item tree.
+class PatternTreeWidget final : public QTreeWidget
+{
+public:
+    using QTreeWidget::QTreeWidget;
+
+    std::function<void()> onRowsReordered;
+
+protected:
+    void dropEvent(QDropEvent *event) override
+    {
+        QTreeWidget::dropEvent(event);
+        if (onRowsReordered)
+            onRowsReordered();
+    }
+};
 
 class PatternLibraryWidget final : public Core::IOptionsPageWidget
 {
@@ -32,13 +55,16 @@ public:
     PatternLibraryWidget()
         : m_workingPatterns(patternLibrary().patterns())
     {
-        m_tree = new QTreeWidget(this);
+        m_tree = new PatternTreeWidget(this);
         m_tree->setColumnCount(6);
         m_tree->setHeaderLabels(
             {Tr::tr("Name"), Tr::tr("Pattern"), Tr::tr("Regex"), Tr::tr("Case"),
              Tr::tr("Invert"), Tr::tr("Color")});
         m_tree->setRootIsDecorated(false);
         m_tree->setUniformRowHeights(true);
+        m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+        m_tree->setDragDropMode(QAbstractItemView::InternalMove);
+        m_tree->setDropIndicatorShown(true);
         m_tree->header()->setSectionResizeMode(NameColumn, QHeaderView::Stretch);
         m_tree->header()->setSectionResizeMode(PatternColumn, QHeaderView::Stretch);
         refreshTree();
@@ -46,14 +72,23 @@ public:
         auto *addButton = new QPushButton(Tr::tr("Add"), this);
         m_removeButton = new QPushButton(Tr::tr("Remove"), this);
         m_removeButton->setEnabled(false);
+        m_moveUpButton = new QPushButton(Tr::tr("Move Up"), this);
+        m_moveUpButton->setEnabled(false);
+        m_moveDownButton = new QPushButton(Tr::tr("Move Down"), this);
+        m_moveDownButton->setEnabled(false);
 
         connect(addButton, &QPushButton::clicked, this, &PatternLibraryWidget::addPattern);
         connect(m_removeButton, &QPushButton::clicked, this, &PatternLibraryWidget::removeSelected);
+        connect(m_moveUpButton, &QPushButton::clicked, this, [this] { moveSelected(-1); });
+        connect(m_moveDownButton, &QPushButton::clicked, this, [this] { moveSelected(1); });
         connect(m_tree, &QTreeWidget::currentItemChanged, this, &PatternLibraryWidget::selectItem);
+        m_tree->onRowsReordered = [this] { syncOrderFromTree(); };
 
         auto *buttonColumn = new QVBoxLayout;
         buttonColumn->addWidget(addButton);
         buttonColumn->addWidget(m_removeButton);
+        buttonColumn->addWidget(m_moveUpButton);
+        buttonColumn->addWidget(m_moveDownButton);
         buttonColumn->addStretch();
 
         auto *topRow = new QHBoxLayout;
@@ -163,6 +198,13 @@ private:
         m_removeButton->setEnabled(enabled);
     }
 
+    void updateMoveButtons()
+    {
+        const int row = m_tree->indexOfTopLevelItem(m_tree->currentItem());
+        m_moveUpButton->setEnabled(row > 0);
+        m_moveDownButton->setEnabled(row >= 0 && row < m_tree->topLevelItemCount() - 1);
+    }
+
     void addPattern()
     {
         const Pattern fresh = Pattern::createNew();
@@ -182,6 +224,46 @@ private:
         const QString id = item->data(NameColumn, Qt::UserRole).toString();
         m_workingPatterns.removeIf([&id](const Pattern &p) { return p.id == id; });
         delete item;
+        updateMoveButtons();
+        Utils::markSettingsDirty();
+    }
+
+    // Swaps the selected pattern with its neighbor in the given direction (-1 up, +1 down),
+    // moving the corresponding tree item to match without rebuilding the whole tree.
+    void moveSelected(int direction)
+    {
+        QTreeWidgetItem *item = m_tree->currentItem();
+        if (!item)
+            return;
+
+        const int row = m_tree->indexOfTopLevelItem(item);
+        const int targetRow = row + direction;
+        if (targetRow < 0 || targetRow >= m_workingPatterns.size())
+            return;
+
+        m_workingPatterns.swapItemsAt(row, targetRow);
+
+        m_tree->takeTopLevelItem(row);
+        m_tree->insertTopLevelItem(targetRow, item);
+        m_tree->setCurrentItem(item);
+
+        updateMoveButtons();
+        Utils::markSettingsDirty();
+    }
+
+    // Called after a drag-and-drop reorder: the tree view has already moved the item(s), so
+    // rebuild m_workingPatterns from the tree's current top-level order.
+    void syncOrderFromTree()
+    {
+        QList<Pattern> reordered;
+        reordered.reserve(m_tree->topLevelItemCount());
+        for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+            const QString id = m_tree->topLevelItem(i)->data(NameColumn, Qt::UserRole).toString();
+            if (const auto pattern = patternAt(id))
+                reordered.append(*pattern);
+        }
+        m_workingPatterns = reordered;
+        updateMoveButtons();
         Utils::markSettingsDirty();
     }
 
@@ -200,6 +282,7 @@ private:
             m_errorLabel->clear();
             m_updatingFields = false;
             setFieldsEnabled(false);
+            updateMoveButtons();
             return;
         }
 
@@ -220,6 +303,7 @@ private:
         m_errorLabel->clear();
         m_updatingFields = false;
         setFieldsEnabled(true);
+        updateMoveButtons();
     }
 
     void updateColorButton()
@@ -278,7 +362,7 @@ private:
         Utils::markSettingsDirty();
     }
 
-    QTreeWidget *m_tree;
+    PatternTreeWidget *m_tree;
     QLineEdit *m_nameEdit;
     QLineEdit *m_patternEdit;
     QCheckBox *m_regexCheck;
@@ -287,6 +371,8 @@ private:
     QPushButton *m_colorButton;
     QLabel *m_errorLabel;
     QPushButton *m_removeButton;
+    QPushButton *m_moveUpButton;
+    QPushButton *m_moveDownButton;
     QList<Pattern> m_workingPatterns;
     QString m_currentId;
     QColor m_currentColor = QColor(Qt::gray);
