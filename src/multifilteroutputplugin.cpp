@@ -14,20 +14,25 @@
 
 namespace MultiFilterOutput::Internal {
 
-MultiFilterOutputPlugin::~MultiFilterOutputPlugin() = default;
+MultiFilterOutputPlugin::~MultiFilterOutputPlugin()
+{
+    delete m_outputPane;
+    delete m_runTracker;
+    delete m_settingsPage;
+}
 
 void MultiFilterOutputPlugin::initialize()
 {
     Core::IOptionsPage::registerCategory(
         Constants::OPTIONS_CATEGORY_ID, Tr::tr("MultiFilterOutput"), {});
 
-    static PatternLibrarySettingsPage settingsPage;
+    m_settingsPage = new PatternLibrarySettingsPage;
     patternLibrary().load();
 
     ProjectExplorer::RunConfiguration::registerAspect<FilterSetAspect>();
 
-    static RunTracker runTracker;
-    static FilteredOutputPane outputPane(&runTracker);
+    m_runTracker = new RunTracker;
+    m_outputPane = new FilteredOutputPane(m_runTracker);
 }
 
 ExtensionSystem::IPlugin::ShutdownFlag MultiFilterOutputPlugin::aboutToShutdown()
