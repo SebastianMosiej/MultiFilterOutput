@@ -149,6 +149,14 @@ private:
     QTreeWidgetItem *makeItem(const Pattern &p) const
     {
         auto *item = new QTreeWidgetItem;
+        // Rows must not be individual drop targets: with the default ItemIsDropEnabled, a
+        // drop anywhere but a razor-thin margin at a row's very top/bottom edge nests the
+        // dragged item as that row's child instead of reordering it as a sibling, and since
+        // this tree is flat, the nested item silently disappears from topLevelItem() (and
+        // from m_workingPatterns via syncOrderFromTree()). Clearing the flag makes Qt treat
+        // any drop over the row as Above/Below instead -- see
+        // QAbstractItemViewPrivate::position() -- giving a full-row reorder target.
+        item->setFlags(item->flags() & ~Qt::ItemIsDropEnabled);
         item->setData(NameColumn, Qt::UserRole, p.id);
         fillItem(item, p);
         return item;
