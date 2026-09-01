@@ -45,6 +45,8 @@ add_qtc_plugin(MultiFilterOutput
     src/patternlibrary.cpp
     src/patternlibrarysettingspage.h
     src/patternlibrarysettingspage.cpp
+    src/outputpanesettings.h
+    src/outputpanesettings.cpp
     src/filtersetaspect.h
     src/filtersetaspect.cpp
     src/filereference.h

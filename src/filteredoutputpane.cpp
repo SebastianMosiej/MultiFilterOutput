@@ -4,6 +4,7 @@
 #include "linematcher.h"
 #include "multifilteroutputconstants.h"
 #include "multifilteroutputtr.h"
+#include "outputpanesettings.h"
 #include "outputtabwidget.h"
 #include "patternlibrary.h"
 #include "tablabel.h"
@@ -28,8 +29,11 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     setDisplayName(Tr::tr("MultiFilterOutput"));
     // A negative priority hides the pane's status-bar button by default; the real panes use
     // Issues 100, Search Results 80, Application Output 60, Compile Output 40, Terminal 20,
-    // so 50 puts our button between Compile Output and Application Output and shows it.
-    setPriorityInStatusBar(50);
+    // Todo 10 (the lowest built-in priority that is still shown by default), so 50 puts our
+    // button next to Application Output, and 0 puts it after every built-in default-visible
+    // pane -- see OutputPaneSettings.
+    setPriorityInStatusBar(
+        outputPaneSettings().placement() == OutputPanePlacement::AtEnd ? 0 : 50);
 
     RunTracker *tracker = m_runTracker;
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);

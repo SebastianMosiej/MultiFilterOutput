@@ -2,8 +2,11 @@
 
 #include "multifilteroutputconstants.h"
 #include "multifilteroutputtr.h"
+#include "outputpanesettings.h"
 #include "pattern.h"
 #include "patternlibrary.h"
+
+#include <coreplugin/icore.h>
 
 #include <utils/guiutils.h>
 
@@ -12,11 +15,14 @@
 #include <QColorDialog>
 #include <QDropEvent>
 #include <QFormLayout>
+#include <QGroupBox>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QRegularExpression>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -55,6 +61,43 @@ public:
     PatternLibraryWidget()
         : m_workingPatterns(patternLibrary().patterns())
     {
+        auto *placementGroup = new QGroupBox(Tr::tr("Output Pane Position"), this);
+        auto *nextToAppOutputRadio = new QRadioButton(Tr::tr("Next to Application Output"), this);
+        auto *atEndRadio = new QRadioButton(Tr::tr("At the end (rightmost)"), this);
+        if (outputPaneSettings().placement() == OutputPanePlacement::AtEnd)
+            atEndRadio->setChecked(true);
+        else
+            nextToAppOutputRadio->setChecked(true);
+        // Unlike the pattern list below, this persists immediately and is not gated by the
+        // Options dialog's Apply/Cancel -- see OutputPaneSettings. The new position itself,
+        // though, only takes effect on the next restart: Qt Creator only re-sorts the
+        // status-bar buttons when building them at startup, and forcing that to happen again
+        // mid-session (by recreating the pane) was tried and found to desync every OTHER
+        // output pane's button from its content -- OutputPaneManager tracks a pane's stacked
+        // content widget by the sorted position it had the first time it was ever shown, and
+        // never updates that mapping, so an unrelated pane's button can end up displaying a
+        // different pane's content until restart.
+        connect(nextToAppOutputRadio, &QRadioButton::toggled, this, [this](bool checked) {
+            if (!checked)
+                return;
+            const bool changed = outputPaneSettings().placement() != OutputPanePlacement::NextToApplicationOutput;
+            outputPaneSettings().setPlacement(OutputPanePlacement::NextToApplicationOutput);
+            if (changed)
+                promptRestart();
+        });
+        connect(atEndRadio, &QRadioButton::toggled, this, [this](bool checked) {
+            if (!checked)
+                return;
+            const bool changed = outputPaneSettings().placement() != OutputPanePlacement::AtEnd;
+            outputPaneSettings().setPlacement(OutputPanePlacement::AtEnd);
+            if (changed)
+                promptRestart();
+        });
+        auto *placementLayout = new QHBoxLayout(placementGroup);
+        placementLayout->addWidget(nextToAppOutputRadio);
+        placementLayout->addWidget(atEndRadio);
+        placementLayout->addStretch();
+
         m_tree = new PatternTreeWidget(this);
         m_tree->setColumnCount(6);
         m_tree->setHeaderLabels(
@@ -123,6 +166,7 @@ public:
         form->addRow(m_errorLabel);
 
         auto *layout = new QVBoxLayout(this);
+        layout->addWidget(placementGroup);
         layout->addLayout(topRow);
         layout->addLayout(form);
 
@@ -139,6 +183,14 @@ public:
     }
 
 private:
+    void promptRestart()
+    {
+        Core::ICore::askForRestart(
+            Tr::tr("The MultiFilterOutput pane's new position takes effect after "
+                   "%1 restarts.")
+                .arg(QGuiApplication::applicationDisplayName()));
+    }
+
     void refreshTree()
     {
         m_tree->clear();

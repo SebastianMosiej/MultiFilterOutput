@@ -4,6 +4,7 @@
 #include "filtersetaspect.h"
 #include "multifilteroutputconstants.h"
 #include "multifilteroutputtr.h"
+#include "outputpanesettings.h"
 #include "patternlibrary.h"
 #include "patternlibrarysettingspage.h"
 #include "runtracker.h"
@@ -30,6 +31,7 @@ void MultiFilterOutputPlugin::initialize()
 
     m_settingsPage = new PatternLibrarySettingsPage;
     patternLibrary().load();
+    outputPaneSettings().load();
 
     ProjectExplorer::RunConfiguration::registerAspect<FilterSetAspect>();
 
