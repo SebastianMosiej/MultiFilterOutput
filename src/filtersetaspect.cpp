@@ -15,9 +15,16 @@
 
 namespace MultiFilterOutput {
 
-FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *bc)
-    : Utils::BaseAspect(bc ? bc : nullptr)
+FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
 {
+    // Deliberately do NOT pass the BuildConfiguration to Utils::BaseAspect(): that would
+    // self-register this aspect into the BuildConfiguration's own (non-owning) aspect
+    // list, in addition to the RunConfiguration's list that
+    // RunConfiguration::registerAspect()'s factory machinery already registers us into
+    // with ownership. The BuildConfiguration then outlives the RunConfiguration/aspect,
+    // leaving a dangling entry that crashes the next time it serializes its aspects (e.g.
+    // ProjectExplorer::Project::saveSettings(), triggered by switching modes). See
+    // ProjectExplorer::CustomParsersAspect for the same reference pattern upstream.
     setId(Constants::FILTER_SET_ASPECT_ID);
     setDisplayName(Tr::tr("Output Filters"));
     setSettingsKey(Constants::FILTER_SET_ASPECT_ID);
