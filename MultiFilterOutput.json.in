@@ -7,7 +7,7 @@
     "Vendor" : "Sebastian Mosiej",
     "Copyright" : "(C) 2026 Sebastian Mosiej",
     "License" : "Put short license information here",
-    "Description" : "Filters the active run's Application Output into tabs by user-defined text/regex patterns.",
+    "Description" : "Splits a running application's console output into separate tabs by user-defined text/regex patterns, with per-run-configuration filter selection, live match counts, and click-to-jump / click-to-open support.",
     "Url" : "",
     "DocumentationUrl" : "",
     "DisabledByDefault" : true,
