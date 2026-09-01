@@ -33,6 +33,11 @@ void FilterSetAspect::setEnabledPatternIds(const QStringList &ids)
     m_enabledPatternIds = ids;
 }
 
+QVariant FilterSetAspect::variantValue() const
+{
+    return m_enabledPatternIds;
+}
+
 void FilterSetAspect::fromMap(const Utils::Store &map)
 {
     m_enabledPatternIds = map.value(Constants::FILTER_SET_ASPECT_ID).toStringList();

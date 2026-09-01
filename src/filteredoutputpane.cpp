@@ -8,7 +8,6 @@
 #include "patternlibrary.h"
 #include "tablabel.h"
 
-#include <projectexplorer/buildconfiguration.h>
 #include <projectexplorer/project.h>
 #include <projectexplorer/runcontrol.h>
 
@@ -89,13 +88,13 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     m_allTab->setLinkParser(project);
 
     // RunControl (v20.0.82) does not retain a live RunConfiguration* of its own -- it only
-    // copies data out of one at start time (copyDataFromRunConfiguration). The live
-    // RunConfiguration this run was started from is reached indirectly, via the
-    // BuildConfiguration it holds a reference to.
-    BuildConfiguration *buildConfig = activeRunControl->buildConfiguration();
-    RunConfiguration *runConfig = buildConfig ? buildConfig->activeRunConfiguration() : nullptr;
-    FilterSetAspect *filterAspect = runConfig ? runConfig->aspect<FilterSetAspect>() : nullptr;
-    const QStringList enabledIds = filterAspect ? filterAspect->enabledPatternIds() : QStringList();
+    // copies data out of one at start time (copyDataFromRunConfiguration), snapshotting each
+    // aspect's Data into a stable, launch-time-frozen copy. Reading through the current
+    // BuildConfiguration's activeRunConfiguration() instead would pick up whichever run
+    // configuration happens to be active *now*, not the one this run was actually launched
+    // from -- so we must read the RunControl's own snapshot here.
+    const auto *filterData = activeRunControl->aspectData<FilterSetAspect>();
+    const QStringList enabledIds = filterData ? filterData->value.toStringList() : QStringList();
 
     for (const QString &id : enabledIds) {
         const auto pattern = patternLibrary().patternById(id);

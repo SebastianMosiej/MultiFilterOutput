@@ -20,6 +20,8 @@ public:
     QStringList enabledPatternIds() const;
     void setEnabledPatternIds(const QStringList &ids);
 
+    QVariant variantValue() const override;
+
     void fromMap(const Utils::Store &map) override;
     void toMap(Utils::Store &map) const override;
 
