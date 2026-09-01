@@ -14,6 +14,8 @@ private slots:
     void plainTextRespectsCaseSensitivity();
     void regexMatches();
     void invertFlipsResult();
+    void invalidRegexFailsSafe();
+    void repeatedCallsStayConsistent();
 };
 
 void tst_LineMatcher::plainTextMatchCaseInsensitiveByDefault()
@@ -59,6 +61,41 @@ void tst_LineMatcher::invertFlipsResult()
 
     QVERIFY(lineMatches(p, "12:00 INFO started"));
     QVERIFY(!lineMatches(p, "12:00 DEBUG verbose detail"));
+}
+
+void tst_LineMatcher::invalidRegexFailsSafe()
+{
+    // A hand-edited QtCreator.ini can carry a pattern QRegularExpression cannot compile.
+    // Matching must not warn or crash, and must behave as "this pattern never matches".
+    Pattern p;
+    p.isRegex = true;
+    p.patternText = "([unterminated";
+
+    QVERIFY(!lineMatches(p, "anything at all"));
+    QVERIFY(!lineMatches(p, "([unterminated"));
+
+    p.invert = true;
+    QVERIFY(lineMatches(p, "anything at all"));
+}
+
+void tst_LineMatcher::repeatedCallsStayConsistent()
+{
+    // The compiled expression is cached between calls; repeated matching (including with
+    // the same pattern text at a different case sensitivity) must still be correct.
+    Pattern insensitive;
+    insensitive.isRegex = true;
+    insensitive.caseSensitive = false;
+    insensitive.patternText = "ERROR";
+
+    Pattern sensitive = insensitive;
+    sensitive.caseSensitive = true;
+
+    for (int i = 0; i < 3; ++i) {
+        QVERIFY(lineMatches(insensitive, "some error here"));
+        QVERIFY(lineMatches(insensitive, "some ERROR here"));
+        QVERIFY(!lineMatches(sensitive, "some error here"));
+        QVERIFY(lineMatches(sensitive, "some ERROR here"));
+    }
 }
 
 QTEST_GUILESS_MAIN(tst_LineMatcher)
