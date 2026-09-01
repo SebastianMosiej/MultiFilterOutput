@@ -38,6 +38,8 @@ add_qtc_plugin(MultiFilterOutput
     src/pattern.cpp
     src/linematcher.h
     src/linematcher.cpp
+    src/linebuffer.h
+    src/linebuffer.cpp
 )
 
 target_include_directories(MultiFilterOutput PRIVATE src)
@@ -49,6 +51,10 @@ if(WITH_TESTS)
   )
   add_qtc_test(tst_linematcher
     SOURCES tests/tst_linematcher.cpp
+    DEPENDS MultiFilterOutput
+  )
+  add_qtc_test(tst_linebuffer
+    SOURCES tests/tst_linebuffer.cpp
     DEPENDS MultiFilterOutput
   )
 endif()
