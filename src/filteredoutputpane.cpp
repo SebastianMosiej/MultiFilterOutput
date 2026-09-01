@@ -12,6 +12,7 @@
 #include <projectexplorer/runcontrol.h>
 
 #include <QLabel>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QVBoxLayout>
 
@@ -25,13 +26,14 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
 {
     setId(Constants::OUTPUT_PANE_ID);
     setDisplayName(Tr::tr("MultiFilterOutput"));
-    setPriorityInStatusBar(-10); // just right of Application Output
+    // A negative priority hides the pane's status-bar button by default; the real panes use
+    // Issues 100, Search Results 80, Application Output 60, Compile Output 40, Terminal 20,
+    // so 50 puts our button between Compile Output and Application Output and shows it.
+    setPriorityInStatusBar(50);
 
-    connect(m_runTracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);
-    connect(m_runTracker,
-            &RunTracker::activeRunLineReceived,
-            this,
-            &FilteredOutputPane::onLineReceived);
+    RunTracker *tracker = m_runTracker;
+    connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);
+    connect(tracker, &RunTracker::activeRunLineReceived, this, &FilteredOutputPane::onLineReceived);
 }
 
 QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
@@ -71,7 +73,9 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
         pair.second->deleteLater();
     }
     m_patternTabs.clear();
-    m_allTab->clear();
+    // reset(), not clear(): the inherited QPlainTextEdit::clear() leaves the match count,
+    // the source-block mapping and the formatter's carry-over buffer stale.
+    m_allTab->reset();
 
     if (m_runLabel) {
         m_runLabel->setText(
@@ -97,27 +101,45 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     const QStringList enabledIds = filterData ? filterData->value.toStringList() : QStringList();
 
     for (const QString &id : enabledIds) {
-        const auto pattern = patternLibrary().patternById(id);
-        if (!pattern)
+        const auto stored = patternLibrary().patternById(id);
+        if (!stored)
             continue; // pattern deleted since selection was saved -- skip silently
+        const Pattern pattern = *stored;
 
         auto *tab = new OutputTabWidget(m_tabWidget);
         tab->setLinkParser(project);
-        tab->setJumpTarget(m_allTab);
-        connect(tab, &OutputTabWidget::matchCountChanged, this, [this, tab](int count) {
-            for (int i = 0; i < m_tabWidget->count(); ++i) {
-                if (m_tabWidget->widget(i) == tab) {
-                    for (const auto &pair : std::as_const(m_patternTabs)) {
-                        if (pair.second == tab)
-                            m_tabWidget->setTabText(i, tabLabel(pair.first, count));
-                    }
-                }
-            }
+        connect(tab, &OutputTabWidget::matchCountChanged, this, [this, pattern, tab](int count) {
+            updateTabLabel(pattern, tab, count);
         });
+        connect(tab, &OutputTabWidget::jumpRequested, this, &FilteredOutputPane::onJumpRequested);
 
-        m_patternTabs.append({*pattern, tab});
-        m_tabWidget->addTab(tab, tabLabel(*pattern, 0));
+        m_patternTabs.append({pattern, tab});
+        m_tabWidget->addTab(tab, tabLabel(pattern, 0));
+        updateTabLabel(pattern, tab, 0);
     }
+}
+
+void FilteredOutputPane::updateTabLabel(const Pattern &pattern, OutputTabWidget *tab, int count)
+{
+    if (!m_tabWidget)
+        return;
+    const int index = m_tabWidget->indexOf(tab);
+    if (index == -1)
+        return;
+    m_tabWidget->setTabText(index, tabLabel(pattern, count));
+    // Pattern::color is user-editable and persisted; this is where it becomes visible.
+    if (pattern.color.isValid())
+        m_tabWidget->tabBar()->setTabTextColor(index, pattern.color);
+}
+
+void FilteredOutputPane::onJumpRequested(int sourceBlockNumber)
+{
+    if (!m_tabWidget || !m_allTab || sourceBlockNumber < 0)
+        return;
+    // Switching to the "All" tab is half the point: scrolling a tab the user cannot see
+    // looks like nothing happened at all.
+    m_tabWidget->setCurrentWidget(m_allTab);
+    m_allTab->scrollToBlock(sourceBlockNumber);
 }
 
 void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat format)
@@ -125,20 +147,22 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
     if (!m_allTab)
         return;
 
-    m_allTab->appendLine(line, format);
+    // The "All" tab is the jump target, so its block number for this line is what every
+    // matching pattern tab must record -- not each tab's own (identity) block index.
+    const int allBlock = m_allTab->appendLine(line, format);
 
     for (const auto &pair : std::as_const(m_patternTabs)) {
         if (lineMatches(pair.first, line))
-            pair.second->appendLine(line, format);
+            pair.second->appendLine(line, format, allBlock);
     }
 }
 
 void FilteredOutputPane::clearContents()
 {
     if (m_allTab)
-        m_allTab->clear();
+        m_allTab->reset();
     for (const auto &pair : std::as_const(m_patternTabs))
-        pair.second->clear();
+        pair.second->reset();
 }
 
 void FilteredOutputPane::setFocus()

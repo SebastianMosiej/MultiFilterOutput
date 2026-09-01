@@ -35,15 +35,25 @@ void OutputTabWidget::setLinkParser(ProjectExplorer::Project *project)
     m_formatter.setLineParsers({new Internal::MultiFilterLineParser(project)});
 }
 
-void OutputTabWidget::appendLine(const QString &line, Utils::OutputFormat format)
+int OutputTabWidget::appendLine(
+    const QString &line, Utils::OutputFormat format, int sourceBlockNumber)
 {
     m_formatter.appendMessage(line + "\n", format);
     // appendMessage's trailing newline advances the cursor into a new, still-empty block, so
     // the block that actually holds the line just appended is the one before the current
     // last block.
-    m_sourceBlockNumbers.append(document()->blockCount() - 2);
+    const int myBlock = document()->blockCount() - 2;
+    m_sourceBlockNumbers.append(sourceBlockNumber >= 0 ? sourceBlockNumber : myBlock);
+
+    // setMaximumBlockCount() silently discards blocks off the front once the cap is hit;
+    // drop the matching front entries so the mapping stays aligned with the document.
+    const qsizetype cap = maximumBlockCount();
+    if (cap > 0 && m_sourceBlockNumbers.size() > cap)
+        m_sourceBlockNumbers.remove(0, m_sourceBlockNumbers.size() - cap);
+
     ++m_matchCount;
     emit matchCountChanged(m_matchCount);
+    return myBlock;
 }
 
 int OutputTabWidget::matchCount() const
@@ -51,23 +61,50 @@ int OutputTabWidget::matchCount() const
     return m_matchCount;
 }
 
-void OutputTabWidget::setJumpTarget(OutputTabWidget *allTabWidget)
+void OutputTabWidget::reset()
 {
-    m_jumpTarget = allTabWidget;
+    // Utils::OutputFormatter::clear() clears the attached text edit. Its sibling reset() is
+    // deliberately NOT used: that one also deletes the installed line parsers, which would
+    // silently disable link parsing for the rest of this tab's life. flush() first so any
+    // in-flight incomplete line is materialized into the document and then cleared with it,
+    // leaving the formatter with an empty carry-over buffer.
+    m_formatter.flush();
+    m_formatter.clear();
+    m_sourceBlockNumbers.clear();
+    m_matchCount = 0;
+    emit matchCountChanged(m_matchCount);
+}
+
+void OutputTabWidget::scrollToBlock(int blockNumber)
+{
+    const QTextBlock block = document()->findBlockByNumber(blockNumber);
+    if (!block.isValid())
+        return;
+    setTextCursor(QTextCursor(block));
+    centerCursor();
+}
+
+void OutputTabWidget::mousePressEvent(QMouseEvent *event)
+{
+    m_pressPos = event->pos();
+    QPlainTextEdit::mousePressEvent(event);
 }
 
 void OutputTabWidget::mouseReleaseEvent(QMouseEvent *event)
 {
-    const QString href = anchorAt(event->pos());
-    if (!href.isEmpty()) {
-        m_formatter.handleLink(href);
-    } else if (m_jumpTarget) {
-        const int blockNumber = cursorForPosition(event->pos()).blockNumber();
-        if (blockNumber >= 0 && blockNumber < m_sourceBlockNumbers.size()) {
-            const int targetBlock = m_sourceBlockNumbers.at(blockNumber);
-            QTextCursor cursor(m_jumpTarget->document()->findBlockByNumber(targetBlock));
-            m_jumpTarget->setTextCursor(cursor);
-            m_jumpTarget->centerCursor();
+    // Drag-vs-click guard, in the spirit of Core::OutputWindow's linksActive handling: a
+    // release that ends a drag, or that leaves a selection behind, is the user selecting
+    // text -- not asking to follow a link or jump to the source line.
+    const bool isClick = (event->pos() - m_pressPos).manhattanLength() < 4
+                         && !textCursor().hasSelection();
+    if (isClick) {
+        const QString href = anchorAt(event->pos());
+        if (!href.isEmpty()) {
+            m_formatter.handleLink(href);
+        } else {
+            const int blockNumber = cursorForPosition(event->pos()).blockNumber();
+            const bool known = blockNumber >= 0 && blockNumber < m_sourceBlockNumbers.size();
+            emit jumpRequested(known ? m_sourceBlockNumbers.at(blockNumber) : -1);
         }
     }
 

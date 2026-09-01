@@ -45,6 +45,8 @@ public:
 private:
     void rebuildTabs(ProjectExplorer::RunControl *activeRunControl);
     void onLineReceived(const QString &line, Utils::OutputFormat format);
+    void onJumpRequested(int sourceBlockNumber);
+    void updateTabLabel(const Pattern &pattern, OutputTabWidget *tab, int count);
 
     RunTracker *m_runTracker;
     QWidget *m_container = nullptr;
