@@ -20,6 +20,10 @@ public:
 
     void addOrUpdate(const Pattern &pattern);
     void remove(const QString &id);
+    // Replaces the whole list in one go, emitting patternsChanged() exactly once. Used by
+    // the options page to push its working copy across on apply() -- and only on apply(),
+    // so that Cancel really cancels.
+    void setPatterns(const QList<Pattern> &patterns);
 
     void load();
     void save() const;

@@ -15,6 +15,7 @@ private slots:
     void removeDeletesById();
     void patternByIdReturnsNulloptWhenMissing();
     void mutationsEmitPatternsChanged();
+    void setPatternsReplacesWholeListAndEmitsOnce();
 };
 
 void tst_PatternLibrary::addOrUpdateInsertsNewPattern()
@@ -69,6 +70,28 @@ void tst_PatternLibrary::mutationsEmitPatternsChanged()
 
     lib.remove(p.id);
     QCOMPARE(spy.count(), 2);
+}
+
+void tst_PatternLibrary::setPatternsReplacesWholeListAndEmitsOnce()
+{
+    PatternLibrary lib;
+    Pattern stale = Pattern::createNew();
+    stale.name = "Stale";
+    lib.addOrUpdate(stale);
+
+    Pattern first = Pattern::createNew();
+    first.name = "First";
+    Pattern second = Pattern::createNew();
+    second.name = "Second";
+
+    QSignalSpy spy(&lib, &PatternLibrary::patternsChanged);
+    lib.setPatterns({first, second});
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(lib.patterns().size(), 2);
+    QCOMPARE(lib.patterns().at(0).name, QStringLiteral("First"));
+    QCOMPARE(lib.patterns().at(1).name, QStringLiteral("Second"));
+    QVERIFY(!lib.patternById(stale.id).has_value());
 }
 
 QTEST_GUILESS_MAIN(tst_PatternLibrary)

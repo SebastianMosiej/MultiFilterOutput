@@ -43,6 +43,12 @@ void PatternLibrary::remove(const QString &id)
         emit patternsChanged();
 }
 
+void PatternLibrary::setPatterns(const QList<Pattern> &patterns)
+{
+    m_patterns = patterns;
+    emit patternsChanged();
+}
+
 void PatternLibrary::load()
 {
     m_patterns.clear();

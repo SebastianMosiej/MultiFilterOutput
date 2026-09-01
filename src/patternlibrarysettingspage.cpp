@@ -20,6 +20,7 @@ class PatternLibraryWidget final : public Core::IOptionsPageWidget
 {
 public:
     PatternLibraryWidget()
+        : m_workingPatterns(patternLibrary().patterns())
     {
         m_list = new QListWidget(this);
         refreshList();
@@ -31,7 +32,7 @@ public:
         connect(addButton, &QPushButton::clicked, this, [this] {
             PatternEditDialog dialog(Pattern::createNew(), this);
             if (dialog.exec() == QDialog::Accepted) {
-                patternLibrary().addOrUpdate(dialog.result());
+                upsert(dialog.result());
                 refreshList();
             }
         });
@@ -39,12 +40,12 @@ public:
             QListWidgetItem *item = m_list->currentItem();
             if (!item)
                 return;
-            const auto existing = patternLibrary().patternById(item->data(Qt::UserRole).toString());
+            const auto existing = patternAt(item->data(Qt::UserRole).toString());
             if (!existing)
                 return;
             PatternEditDialog dialog(*existing, this);
             if (dialog.exec() == QDialog::Accepted) {
-                patternLibrary().addOrUpdate(dialog.result());
+                upsert(dialog.result());
                 refreshList();
             }
         });
@@ -52,7 +53,8 @@ public:
             QListWidgetItem *item = m_list->currentItem();
             if (!item)
                 return;
-            patternLibrary().remove(item->data(Qt::UserRole).toString());
+            const QString id = item->data(Qt::UserRole).toString();
+            m_workingPatterns.removeIf([&id](const Pattern &p) { return p.id == id; });
             refreshList();
         });
 
@@ -67,19 +69,47 @@ public:
         layout->addLayout(buttonLayout);
     }
 
-    void apply() final { patternLibrary().save(); }
+    // Add/Edit/Remove only ever touch the working copy, so dismissing the Options dialog
+    // with Cancel (which simply never calls apply()) leaves the live library -- and, since
+    // the plugin saves it again on shutdown, the on-disk settings -- untouched.
+    void apply() final
+    {
+        patternLibrary().setPatterns(m_workingPatterns);
+        patternLibrary().save();
+    }
 
 private:
     void refreshList()
     {
         m_list->clear();
-        for (const Pattern &p : patternLibrary().patterns()) {
+        for (const Pattern &p : std::as_const(m_workingPatterns)) {
             auto *item = new QListWidgetItem(p.name, m_list);
             item->setData(Qt::UserRole, p.id);
         }
     }
 
+    std::optional<Pattern> patternAt(const QString &id) const
+    {
+        for (const Pattern &p : m_workingPatterns) {
+            if (p.id == id)
+                return p;
+        }
+        return std::nullopt;
+    }
+
+    void upsert(const Pattern &pattern)
+    {
+        for (Pattern &existing : m_workingPatterns) {
+            if (existing.id == pattern.id) {
+                existing = pattern;
+                return;
+            }
+        }
+        m_workingPatterns.append(pattern);
+    }
+
     QListWidget *m_list;
+    QList<Pattern> m_workingPatterns;
 };
 
 } // namespace
