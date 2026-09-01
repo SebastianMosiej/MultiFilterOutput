@@ -1,0 +1,14 @@
+{
+    "Id" : "multifilteroutput",
+    "Name" : "MultiFilterOutput",
+    "Version" : "0.1.0",
+    "CompatVersion" : "0.1.0",
+    "VendorId" : "sebastianmosiej",
+    "Vendor" : "Sebastian Mosiej",
+    "Copyright" : "(C) 2026 Sebastian Mosiej",
+    "License" : "Put short license information here",
+    "Description" : "Filters the active run's Application Output into tabs by user-defined text/regex patterns.",
+    "Url" : "",
+    "DocumentationUrl" : "",
+    ${IDE_PLUGIN_DEPENDENCIES}
+}
