@@ -21,7 +21,15 @@ class MULTIFILTEROUTPUT_EXPORT RunTracker : public QObject
 public:
     explicit RunTracker(QObject *parent = nullptr);
 
-    // The RunControl currently reporting isOutputVisible() == true, or nullptr.
+    // The run whose output this tracker is currently following, or nullptr.
+    //
+    // Note that this is NOT simply "the run reporting isOutputVisible() == true":
+    // isOutputVisible() means "this run's tab is current AND Application Output is the
+    // visible bottom pane", so it goes false for *every* run the moment the user switches
+    // the bottom panel to our own pane. The tracker therefore latches: a run stays active
+    // until a genuinely different run reports itself visible, or until the RunControl
+    // object is destroyed. A run that has merely stopped keeps its tabs up, matching
+    // Application Output's own behavior.
     ProjectExplorer::RunControl *activeRunControl() const;
 
 signals:
@@ -33,6 +41,7 @@ signals:
 private:
     void trackRunControl(ProjectExplorer::RunControl *runControl);
     void untrackRunControl(ProjectExplorer::RunControl *runControl);
+    void handleRunControlDestroyed(ProjectExplorer::RunControl *runControl);
     void updateActiveRunControl();
 
     QHash<ProjectExplorer::RunControl *, LineBuffer> m_buffers;
