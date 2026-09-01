@@ -84,8 +84,14 @@ against the `c:\dev\qt-creator` source tree (see "Feasibility notes" below).
    - `appendMessage(QString msg, Utils::OutputFormat format)` — output text
    - `outputVisibilityChanged(bool)` — reflects `RunControl::isOutputVisible()`,
      which `AppOutputPane` itself sets true only when that run's tab is both
-     current and the Application Output pane is visible. This is the public,
-     unapproximated signal for "this is the active run."
+     current AND Application Output itself is the currently-visible bottom
+     pane. **Correction (found in final review, 2026-09-01):** this is NOT a
+     general "this is the active run" signal — it goes false for every run
+     the instant Application Output stops being the visible pane, including
+     when the user switches to *this plugin's own* pane. `RunTracker` must
+     latch the previously-active run when no tracked run currently reports
+     `isOutputVisible()`, rather than following the signal down to null —
+     see `RunTracker::updateActiveRunControl()`.
 
    `appendMessage` delivers arbitrary chunks, not necessarily line-aligned.
    The tracker buffers each `RunControl`'s trailing partial line and only
@@ -115,10 +121,17 @@ against the `c:\dev\qt-creator` source tree (see "Feasibility notes" below).
    - Toolbar (`toolBarWidgets()`) shows which run is being mirrored, e.g.
      `Filtering: MyApp (pid 1234)`, since multiple run configurations can
      exist.
-   - No active run: placeholder empty state, no stale content shown.
-   - When the active run changes (new run becomes visible, or the visible
-     run stops), all tabs are torn down and rebuilt against the newly active
-     run's `FilterSetAspect` — no cross-run history retained.
+   - No active run (nothing ever tracked, or the last tracked run's process
+     has fully exited and a genuinely different run has since become active):
+     placeholder empty state, no stale content shown.
+   - **Updated (user-directed, 2026-09-01, final review):** tabs are torn
+     down and rebuilt only when a genuinely *different* run becomes active —
+     not the instant the current run's process stops. This matches
+     Application Output's own behavior of keeping a finished run's content
+     visible after exit, so the user can still review filtered output once
+     the app has closed. No cross-run history is retained once a rebuild
+     does happen (switching to a different run still clears the previous
+     run's tabs).
 
 7. **File-link detection** — each tab's `OutputFormatter` is configured with
    a small custom `Utils::OutputLineParser` subclass. It reuses the same
@@ -165,7 +178,9 @@ RunControl::appendMessage(chunk, format)
         │
         ▼
 RunTracker: buffer partial line, emit complete lines
-        │  (only if this RunControl.isOutputVisible())
+        │  (only for the currently-tracked active RunControl — latched,
+        │   not strictly "isOutputVisible() is true right now"; see the
+        │   correction above)
         ▼
 FilteredOutputPane: for each complete line
         │
