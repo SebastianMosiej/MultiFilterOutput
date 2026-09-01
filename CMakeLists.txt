@@ -58,6 +58,8 @@ add_qtc_plugin(MultiFilterOutput
     src/runtracker.cpp
     src/tablabel.h
     src/tablabel.cpp
+    src/filteredoutputpane.h
+    src/filteredoutputpane.cpp
 )
 
 target_include_directories(MultiFilterOutput PRIVATE src)
