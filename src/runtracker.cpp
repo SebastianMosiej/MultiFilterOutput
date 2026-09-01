@@ -49,15 +49,11 @@ void RunTracker::trackRunControl(RunControl *runControl)
                 emit activeRunLineReceived(line, format);
         });
 
-    connect(runControl, &RunControl::outputVisibilityChanged, this, [this](bool) {
-        updateActiveRunControl();
-    });
-
     connect(runControl, &QObject::destroyed, this, [this, runControl] {
         handleRunControlDestroyed(runControl);
     });
 
-    updateActiveRunControl();
+    activateRunControl(runControl);
 }
 
 void RunTracker::untrackRunControl(RunControl *runControl)
@@ -71,11 +67,10 @@ void RunTracker::untrackRunControl(RunControl *runControl)
     disconnect(runControl, nullptr, this, nullptr);
     m_buffers.remove(runControl);
 
-    // Deliberately do NOT touch m_active or re-run updateActiveRunControl() here: a run
-    // that has merely stopped keeps its tabs on screen (like Application Output does)
-    // until a genuinely different run takes over or the RunControl itself is destroyed.
-    // The destroyed connection just dropped above is the one thing we still need, so
-    // re-establish it for the run we are still displaying.
+    // Deliberately do NOT touch m_active here: a run that has merely stopped keeps its
+    // tabs on screen (like Application Output does) until a different run starts or the
+    // RunControl itself is destroyed. The destroyed connection just dropped above is the
+    // one thing we still need, so re-establish it for the run we are still displaying.
     if (m_active == runControl) {
         connect(runControl, &QObject::destroyed, this, [this, runControl] {
             handleRunControlDestroyed(runControl);
@@ -92,28 +87,13 @@ void RunTracker::handleRunControlDestroyed(RunControl *runControl)
     }
 }
 
-void RunTracker::updateActiveRunControl()
+void RunTracker::activateRunControl(RunControl *runControl)
 {
-    RunControl *newActive = nullptr;
-    for (auto it = m_buffers.constBegin(); it != m_buffers.constEnd(); ++it) {
-        if (it.key()->isOutputVisible()) {
-            newActive = it.key();
-            break;
-        }
-    }
-
-    // No tracked run currently reports "visible" -- e.g. the user switched the bottom
-    // panel to our own pane, which hides AppOutputPane and clears every run's visibility
-    // flag, or the run we are following has stopped and been untracked. Keep following the
-    // run we were already tracking rather than blanking the pane; only
-    // handleRunControlDestroyed() ever clears m_active.
-    if (!newActive && m_active)
+    if (runControl == m_active)
         return;
 
-    if (newActive != m_active) {
-        m_active = newActive;
-        emit activeRunChanged(m_active);
-    }
+    m_active = runControl;
+    emit activeRunChanged(m_active);
 }
 
 } // namespace MultiFilterOutput

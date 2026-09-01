@@ -23,13 +23,16 @@ public:
 
     // The run whose output this tracker is currently following, or nullptr.
     //
-    // Note that this is NOT simply "the run reporting isOutputVisible() == true":
-    // isOutputVisible() means "this run's tab is current AND Application Output is the
-    // visible bottom pane", so it goes false for *every* run the moment the user switches
-    // the bottom panel to our own pane. The tracker therefore latches: a run stays active
-    // until a genuinely different run reports itself visible, or until the RunControl
-    // object is destroyed. A run that has merely stopped keeps its tabs up, matching
-    // Application Output's own behavior.
+    // Qt Creator 20.0.1 exposes no public "this run's Application Output tab is the one
+    // currently visible" signal (that landed only in later dev snapshots as
+    // RunControl::isOutputVisible()/outputVisibilityChanged, and AppOutputPane's own
+    // notion of the current tab is a private implementation detail). We approximate it
+    // instead: a run becomes active the moment it starts, mirroring Application Output's
+    // default behavior of switching focus to a freshly started run. The tracker then
+    // latches onto that run until either a different run starts or the RunControl object
+    // is destroyed -- a run that has merely stopped keeps its tabs up. This will NOT
+    // notice the user manually switching Application Output back to view an older,
+    // already-finished run's tab.
     ProjectExplorer::RunControl *activeRunControl() const;
 
 signals:
@@ -42,7 +45,7 @@ private:
     void trackRunControl(ProjectExplorer::RunControl *runControl);
     void untrackRunControl(ProjectExplorer::RunControl *runControl);
     void handleRunControlDestroyed(ProjectExplorer::RunControl *runControl);
-    void updateActiveRunControl();
+    void activateRunControl(ProjectExplorer::RunControl *runControl);
 
     QHash<ProjectExplorer::RunControl *, LineBuffer> m_buffers;
     ProjectExplorer::RunControl *m_active = nullptr;
