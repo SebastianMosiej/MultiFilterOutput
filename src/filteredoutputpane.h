@@ -47,6 +47,10 @@ private:
     void onLineReceived(const QString &line, Utils::OutputFormat format);
     void onJumpRequested(int sourceBlockNumber);
     void updateTabLabel(const Pattern &pattern, OutputTabWidget *tab, int count);
+    // Keeps every tab in this pane at the same zoom level: applied whenever a tab is
+    // (re)created, and re-broadcast to every other tab (and persisted) whenever any one tab's
+    // own wheelEvent() changes it.
+    void onTabZoomChanged(qreal zoom);
 
     RunTracker *m_runTracker;
     QWidget *m_container = nullptr;
@@ -54,6 +58,7 @@ private:
     OutputTabWidget *m_allTab = nullptr;
     QList<QPair<Pattern, OutputTabWidget *>> m_patternTabs;
     QLabel *m_runLabel = nullptr;
+    qreal m_fontZoom = 0;
 };
 
 } // namespace MultiFilterOutput::Internal

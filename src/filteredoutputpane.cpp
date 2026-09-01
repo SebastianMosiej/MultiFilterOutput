@@ -9,8 +9,12 @@
 #include "patternlibrary.h"
 #include "tablabel.h"
 
+#include <coreplugin/icore.h>
+
 #include <projectexplorer/project.h>
 #include <projectexplorer/runcontrol.h>
+
+#include <utils/qtcsettings.h>
 
 #include <QLabel>
 #include <QTabBar>
@@ -35,6 +39,11 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     setPriorityInStatusBar(
         outputPaneSettings().placement() == OutputPanePlacement::AtEnd ? 0 : 50);
 
+    Utils::QtcSettings *settings = Core::ICore::settings();
+    settings->beginGroup(Constants::SETTINGS_GROUP);
+    m_fontZoom = settings->value(Constants::OUTPUT_FONT_ZOOM_KEY, 0.0).toDouble();
+    settings->endGroup();
+
     RunTracker *tracker = m_runTracker;
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);
     connect(tracker, &RunTracker::activeRunLineReceived, this, &FilteredOutputPane::onLineReceived);
@@ -47,6 +56,8 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
         m_tabWidget = new QTabWidget(m_container);
 
         m_allTab = new OutputTabWidget(m_tabWidget);
+        m_allTab->setFontZoom(m_fontZoom);
+        connect(m_allTab, &OutputTabWidget::fontZoomChanged, this, &FilteredOutputPane::onTabZoomChanged);
         m_tabWidget->addTab(m_allTab, Tr::tr("All"));
 
         auto *layout = new QVBoxLayout(m_container);
@@ -112,15 +123,35 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
 
         auto *tab = new OutputTabWidget(m_tabWidget);
         tab->setLinkParser(project);
+        tab->setFontZoom(m_fontZoom);
         connect(tab, &OutputTabWidget::matchCountChanged, this, [this, pattern, tab](int count) {
             updateTabLabel(pattern, tab, count);
         });
         connect(tab, &OutputTabWidget::jumpRequested, this, &FilteredOutputPane::onJumpRequested);
+        connect(tab, &OutputTabWidget::fontZoomChanged, this, &FilteredOutputPane::onTabZoomChanged);
 
         m_patternTabs.append({pattern, tab});
         m_tabWidget->addTab(tab, tabLabel(pattern, 0));
         updateTabLabel(pattern, tab, 0);
     }
+}
+
+void FilteredOutputPane::onTabZoomChanged(qreal zoom)
+{
+    if (zoom == m_fontZoom)
+        return;
+    m_fontZoom = zoom;
+
+    if (m_allTab)
+        m_allTab->setFontZoom(zoom);
+    for (const auto &pair : std::as_const(m_patternTabs))
+        pair.second->setFontZoom(zoom);
+
+    Utils::QtcSettings *settings = Core::ICore::settings();
+    settings->beginGroup(Constants::SETTINGS_GROUP);
+    settings->setValue(Constants::OUTPUT_FONT_ZOOM_KEY, zoom);
+    settings->endGroup();
+    settings->sync();
 }
 
 void FilteredOutputPane::updateTabLabel(const Pattern &pattern, OutputTabWidget *tab, int count)

@@ -9,9 +9,11 @@
 
 #include <utils/link.h>
 
+#include <QAbstractScrollArea>
 #include <QMouseEvent>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <QWheelEvent>
 
 namespace MultiFilterOutput {
 
@@ -24,12 +26,12 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
 
     // Match Application Output's font, including live updates when the user changes it in
     // Preferences > Text Editor > Font & Colors -- Core::OutputWindow follows the same setting.
-    setFont(TextEditor::TextEditorSettings::fontSettings().font());
+    setBaseFont(TextEditor::TextEditorSettings::fontSettings().font());
     connect(
         TextEditor::TextEditorSettings::instance(),
         &TextEditor::TextEditorSettings::fontSettingsChanged,
         this,
-        [this] { setFont(TextEditor::TextEditorSettings::fontSettings().font()); });
+        [this] { setBaseFont(TextEditor::TextEditorSettings::fontSettings().font()); });
 
     // An absolute "file://" link is resolved by OutputFormatter itself (see
     // Utils::OutputFormatter::handleFileLink()) rather than being forwarded to the line
@@ -96,6 +98,29 @@ void OutputTabWidget::scrollToBlock(int blockNumber)
     centerCursor();
 }
 
+void OutputTabWidget::setBaseFont(const QFont &newFont)
+{
+    // Mirrors Core::OutputWindow::setBaseFont(): re-basing the font (e.g. a live Preferences
+    // change) keeps whatever zoom offset is already applied, rather than discarding it.
+    const qreal zoom = fontZoom();
+    m_baseFontSize = newFont.pointSizeF();
+    QFont tmp = newFont;
+    tmp.setPointSizeF(qMax(m_baseFontSize + zoom, 4.0));
+    setFont(tmp);
+}
+
+qreal OutputTabWidget::fontZoom() const
+{
+    return font().pointSizeF() - m_baseFontSize;
+}
+
+void OutputTabWidget::setFontZoom(qreal zoom)
+{
+    QFont f = font();
+    f.setPointSizeF(qMax(m_baseFontSize + zoom, 4.0));
+    setFont(f);
+}
+
 void OutputTabWidget::mousePressEvent(QMouseEvent *event)
 {
     m_pressPos = event->pos();
@@ -121,6 +146,22 @@ void OutputTabWidget::mouseReleaseEvent(QMouseEvent *event)
     }
 
     QPlainTextEdit::mouseReleaseEvent(event);
+}
+
+void OutputTabWidget::wheelEvent(QWheelEvent *event)
+{
+    // Mirrors Core::OutputWindow::wheelEvent(): Ctrl+wheel zooms this tab; FilteredOutputPane
+    // propagates fontZoomChanged() to every other tab in the pane so they all stay in sync
+    // with each other.
+    if (event->modifiers() & Qt::ControlModifier) {
+        const float delta = event->angleDelta().y() / 120.f;
+        if (delta < 0.f && font().pointSizeF() + delta < 4.f)
+            return;
+        zoomInF(delta);
+        emit fontZoomChanged(fontZoom());
+        return;
+    }
+    QAbstractScrollArea::wheelEvent(event);
 }
 
 } // namespace MultiFilterOutput

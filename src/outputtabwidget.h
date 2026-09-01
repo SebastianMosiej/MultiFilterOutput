@@ -8,6 +8,10 @@
 #include <QPlainTextEdit>
 #include <QPoint>
 
+QT_BEGIN_NAMESPACE
+class QWheelEvent;
+QT_END_NAMESPACE
+
 namespace ProjectExplorer {
 class Project;
 }
@@ -44,15 +48,30 @@ public:
     // Scrolls to and selects the given block, if it still exists.
     void scrollToBlock(int blockNumber);
 
+    // Sets the font this tab treats as "unzoomed", preserving whatever zoom offset (if any)
+    // is currently applied -- e.g. when the Preferences > Text Editor font changes live.
+    void setBaseFont(const QFont &font);
+
+    // The current zoom offset from the base font, in points. Applying the same value to
+    // every tab in a FilteredOutputPane (see FilteredOutputPane::onTabZoomChanged) is how
+    // they're kept in sync with each other.
+    qreal fontZoom() const;
+    void setFontZoom(qreal zoom);
+
 signals:
     void matchCountChanged(int count);
     // Emitted on a click that isn't a linkified reference; sourceBlockNumber is the value
     // this tab recorded for the clicked line, or -1 if there is none.
     void jumpRequested(int sourceBlockNumber);
+    // Emitted only when this tab's own wheelEvent() changes the zoom (not when setFontZoom()
+    // is called to apply an externally-driven value), so listeners can propagate it onward
+    // without feeding back into a loop.
+    void fontZoomChanged(qreal zoom);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
 
 private:
     Utils::OutputFormatter m_formatter;
@@ -61,6 +80,8 @@ private:
     QList<int> m_sourceBlockNumbers;
     QPoint m_pressPos;
     int m_matchCount = 0;
+    // The point size setBaseFont() was last given, i.e. the size fontZoom() is relative to.
+    qreal m_baseFontSize = 0;
 };
 
 } // namespace MultiFilterOutput
