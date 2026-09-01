@@ -52,7 +52,10 @@ PatternEditDialog::PatternEditDialog(const Pattern &initial, QWidget *parent)
     layout->addLayout(form);
     layout->addWidget(buttons);
 
-    connect(m_patternEdit, &QLineEdit::textChanged, this, &PatternEditDialog::updateValidationState);
+    connect(m_patternEdit,
+            &QLineEdit::textChanged,
+            this,
+            &PatternEditDialog::updateValidationState);
     connect(m_regexCheck, &QCheckBox::toggled, this, &PatternEditDialog::updateValidationState);
     connect(m_colorButton, &QPushButton::clicked, this, &PatternEditDialog::pickColor);
     updateValidationState();
