@@ -56,6 +56,8 @@ add_qtc_plugin(MultiFilterOutput
     src/outputtabwidget.cpp
     src/runtracker.h
     src/runtracker.cpp
+    src/tablabel.h
+    src/tablabel.cpp
 )
 
 target_include_directories(MultiFilterOutput PRIVATE src)
@@ -83,6 +85,10 @@ if(WITH_TESTS)
   )
   add_qtc_test(tst_filereference
     SOURCES tests/tst_filereference.cpp
+    DEPENDS MultiFilterOutput
+  )
+  add_qtc_test(tst_tablabel
+    SOURCES tests/tst_tablabel.cpp
     DEPENDS MultiFilterOutput
   )
 endif()
