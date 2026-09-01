@@ -50,6 +50,10 @@ add_qtc_plugin(MultiFilterOutput
     src/filtersetaspect.cpp
     src/filereference.h
     src/filereference.cpp
+    src/multifilterlineparser.h
+    src/multifilterlineparser.cpp
+    src/outputtabwidget.h
+    src/outputtabwidget.cpp
 )
 
 target_include_directories(MultiFilterOutput PRIVATE src)
