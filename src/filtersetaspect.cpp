@@ -7,11 +7,14 @@
 
 #include <projectexplorer/buildconfiguration.h>
 
-#include <utils/layoutbuilder.h>
+#include <utils/detailswidget.h>
 
 #include <QCheckBox>
+#include <QPointer>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <algorithm>
 
 namespace MultiFilterOutput {
 
@@ -28,6 +31,76 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
     setId(Constants::FILTER_SET_ASPECT_ID);
     setDisplayName(Tr::tr("Output Filters"));
     setSettingsKey(Constants::FILTER_SET_ASPECT_ID);
+
+    // The Run Settings page renders each RunConfiguration aspect via
+    // createConfigWidget(), which only returns non-null once a creator is set here --
+    // addToLayoutImpl() is for the generic AspectContainer::layouter() path (e.g. Options
+    // pages), which the Run Settings page does not use.
+    setConfigWidgetCreator([this] {
+        // Collapsed by default, like the other Details sections on this page (e.g. Custom
+        // Output Parsers): the checkbox list only needs to be visible while actively
+        // choosing filters, and the summary line covers the common "what's active" check.
+        auto *details = new Utils::DetailsWidget;
+        details->setState(Utils::DetailsWidget::Collapsed);
+
+        auto *container = new QWidget;
+        new QVBoxLayout(container);
+        details->setWidget(container);
+
+        auto updateSummary = [this, guard = QPointer<Utils::DetailsWidget>(details)] {
+            if (!guard)
+                return;
+            const QList<Pattern> patterns = patternLibrary().patterns();
+            const int active = std::count_if(
+                patterns.cbegin(), patterns.cend(), [this](const Pattern &p) {
+                    return m_enabledPatternIds.contains(p.id);
+                });
+            guard->setSummaryText(
+                patterns.isEmpty() ? Tr::tr("No patterns defined")
+                                    : Tr::tr("%1 of %2 filters active")
+                                          .arg(active)
+                                          .arg(patterns.size()));
+        };
+
+        // Rebuilds the checkbox list from the current library contents. Needed because
+        // createConfigWidget() is called (and its result cached) once per RunConfiguration,
+        // so without this the list would freeze at whatever the library held the first time
+        // this run configuration's settings page was opened -- e.g. staying empty forever
+        // if it was viewed before any pattern existed. Guarded by a QPointer since the
+        // container can be destroyed (e.g. switching run configurations) before this aspect
+        // is; connect() uses `this` as context so the reverse teardown order disconnects
+        // cleanly too.
+        auto rebuild = [this, guard = QPointer<QWidget>(container), updateSummary] {
+            if (!guard)
+                return;
+            auto *layout = static_cast<QVBoxLayout *>(guard->layout());
+            while (QLayoutItem *child = layout->takeAt(0)) {
+                delete child->widget();
+                delete child;
+            }
+            for (const Pattern &pattern : patternLibrary().patterns()) {
+                auto *checkBox = new QCheckBox(pattern.name);
+                checkBox->setChecked(m_enabledPatternIds.contains(pattern.id));
+                connect(
+                    checkBox,
+                    &QCheckBox::toggled,
+                    this,
+                    [this, id = pattern.id, updateSummary](bool checked) {
+                        if (checked && !m_enabledPatternIds.contains(id))
+                            m_enabledPatternIds.append(id);
+                        else if (!checked)
+                            m_enabledPatternIds.removeAll(id);
+                        updateSummary();
+                    });
+                layout->addWidget(checkBox);
+            }
+            updateSummary();
+        };
+        rebuild();
+        connect(&patternLibrary(), &PatternLibrary::patternsChanged, this, rebuild);
+
+        return details;
+    });
 }
 
 QStringList FilterSetAspect::enabledPatternIds() const
@@ -53,24 +126,6 @@ void FilterSetAspect::fromMap(const Utils::Store &map)
 void FilterSetAspect::toMap(Utils::Store &map) const
 {
     map.insert(Constants::FILTER_SET_ASPECT_ID, m_enabledPatternIds);
-}
-
-void FilterSetAspect::addToLayoutImpl(Layouting::Layout &parent)
-{
-    auto *container = new QWidget;
-    auto *layout = new QVBoxLayout(container);
-    for (const Pattern &pattern : patternLibrary().patterns()) {
-        auto *checkBox = new QCheckBox(pattern.name, container);
-        checkBox->setChecked(m_enabledPatternIds.contains(pattern.id));
-        connect(checkBox, &QCheckBox::toggled, this, [this, id = pattern.id](bool checked) {
-            if (checked && !m_enabledPatternIds.contains(id))
-                m_enabledPatternIds.append(id);
-            else if (!checked)
-                m_enabledPatternIds.removeAll(id);
-        });
-        layout->addWidget(checkBox);
-    }
-    parent.addItem(container);
 }
 
 } // namespace MultiFilterOutput

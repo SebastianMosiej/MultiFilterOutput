@@ -25,9 +25,6 @@ public:
     void fromMap(const Utils::Store &map) override;
     void toMap(Utils::Store &map) const override;
 
-protected:
-    void addToLayoutImpl(Layouting::Layout &parent) override;
-
 private:
     QStringList m_enabledPatternIds;
 };
