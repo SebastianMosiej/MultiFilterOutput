@@ -46,6 +46,8 @@ add_qtc_plugin(MultiFilterOutput
     src/patterneditdialog.cpp
     src/patternlibrarysettingspage.h
     src/patternlibrarysettingspage.cpp
+    src/filtersetaspect.h
+    src/filtersetaspect.cpp
 )
 
 target_include_directories(MultiFilterOutput PRIVATE src)
@@ -65,6 +67,10 @@ if(WITH_TESTS)
   )
   add_qtc_test(tst_patternlibrary
     SOURCES tests/tst_patternlibrary.cpp
+    DEPENDS MultiFilterOutput
+  )
+  add_qtc_test(tst_filtersetaspect
+    SOURCES tests/tst_filtersetaspect.cpp
     DEPENDS MultiFilterOutput
   )
 endif()
