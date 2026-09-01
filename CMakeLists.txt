@@ -34,9 +34,18 @@ add_qtc_plugin(MultiFilterOutput
     src/multifilteroutputtr.h
     src/multifilteroutputplugin.h
     src/multifilteroutputplugin.cpp
+    src/pattern.h
+    src/pattern.cpp
 )
 
 target_include_directories(MultiFilterOutput PRIVATE src)
+
+if(WITH_TESTS)
+  add_qtc_test(tst_pattern
+    SOURCES tests/tst_pattern.cpp
+    DEPENDS MultiFilterOutput
+  )
+endif()
 
 # Enable the Run button in Qt Creator
 get_target_property(QtCreatorCorePath QtCreator::Core LOCATION)
