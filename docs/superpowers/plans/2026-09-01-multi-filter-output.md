@@ -1127,6 +1127,7 @@ git commit -m "Add PatternLibrary storage with QSettings persistence"
 
   private:
       void validateAndMaybeAccept(); // blocks accept() if regex invalid
+      void pickColor(); // opens QColorDialog, updates the color swatch button
   };
 
   class PatternLibrarySettingsPage final : public Core::IOptionsPage
@@ -1169,6 +1170,7 @@ public:
 
 private:
     void updateValidationState();
+    void pickColor();
 
     Pattern m_pattern;
     QLineEdit *m_nameEdit;
@@ -1176,6 +1178,7 @@ private:
     QCheckBox *m_regexCheck;
     QCheckBox *m_caseSensitiveCheck;
     QCheckBox *m_invertCheck;
+    QPushButton *m_colorButton;
     QLabel *m_errorLabel;
     QPushButton *m_okButton;
 };
@@ -1191,6 +1194,7 @@ private:
 #include "multifilteroutputtr.h"
 
 #include <QCheckBox>
+#include <QColorDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QLabel>
@@ -1215,6 +1219,8 @@ PatternEditDialog::PatternEditDialog(const Pattern &initial, QWidget *parent)
     m_caseSensitiveCheck->setChecked(m_pattern.caseSensitive);
     m_invertCheck = new QCheckBox(Tr::tr("Exclude matching lines (invert)"), this);
     m_invertCheck->setChecked(m_pattern.invert);
+    m_colorButton = new QPushButton(Tr::tr("Choose..."), this);
+    m_colorButton->setStyleSheet(QStringLiteral("background-color: %1;").arg(m_pattern.color.name()));
     m_errorLabel = new QLabel(this);
     m_errorLabel->setStyleSheet("color: red;");
 
@@ -1224,6 +1230,7 @@ PatternEditDialog::PatternEditDialog(const Pattern &initial, QWidget *parent)
     form->addRow(m_regexCheck);
     form->addRow(m_caseSensitiveCheck);
     form->addRow(m_invertCheck);
+    form->addRow(Tr::tr("Tab color:"), m_colorButton);
     form->addRow(m_errorLabel);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -1237,6 +1244,7 @@ PatternEditDialog::PatternEditDialog(const Pattern &initial, QWidget *parent)
 
     connect(m_patternEdit, &QLineEdit::textChanged, this, &PatternEditDialog::updateValidationState);
     connect(m_regexCheck, &QCheckBox::toggled, this, &PatternEditDialog::updateValidationState);
+    connect(m_colorButton, &QPushButton::clicked, this, &PatternEditDialog::pickColor);
     updateValidationState();
 }
 
@@ -1248,6 +1256,15 @@ void PatternEditDialog::updateValidationState()
 
     m_errorLabel->setText(valid ? QString() : Tr::tr("Pattern is empty or not a valid regular expression."));
     m_okButton->setEnabled(valid);
+}
+
+void PatternEditDialog::pickColor()
+{
+    const QColor chosen = QColorDialog::getColor(m_pattern.color, this, Tr::tr("Choose Tab Color"));
+    if (chosen.isValid()) {
+        m_pattern.color = chosen;
+        m_colorButton->setStyleSheet(QStringLiteral("background-color: %1;").arg(chosen.name()));
+    }
 }
 
 Pattern PatternEditDialog::result() const
@@ -1650,9 +1667,12 @@ git commit -m "Add FilterSetAspect for per-run-configuration pattern selection"
   };
 
   // Scans `line` for QML/file/qrc URLs with :line[:col], Q_ASSERT/Q_ASSERT_X
-  // failures, "Object::... in file:line" warnings, and QTest failure
-  // locations (Unix and Windows forms). Returns non-overlapping matches in
-  // left-to-right order.
+  // failures, and "Object::... in file:line" warnings. (QTest failure-location
+  // matching is out of scope for this task — see Global Constraints/plan
+  // ruling: those patterns use PCRE branch-reset/named groups that add
+  // meaningful regex risk for a form this plugin's target use case, runtime
+  // app output, essentially never produces; add it later as its own task if
+  // needed.) Returns non-overlapping matches in left-to-right order.
   MULTIFILTEROUTPUT_EXPORT QList<FileReference> findFileReferences(const QString &line);
   } // namespace MultiFilterOutput
   ```
@@ -1819,13 +1839,13 @@ Add `src/filereference.h`/`.cpp` to `CMakeLists.txt`'s `SOURCES`.
 cmake --build C:\dev\MultipleFiltersAppOutput\build --target tst_filereference
 ctest --test-dir C:\dev\MultipleFiltersAppOutput\build -R tst_filereference
 ```
-Expected: PASS (4 tests). If the QTest/Windows QTest-failure-location regex needs adjusting once real sample output is available, fix in this file only — `findFileReferences`'s signature must not change (Task 9 depends on it).
+Expected: PASS (4 tests). If any regex needs adjusting once real sample output is available, fix in this file only — `findFileReferences`'s signature must not change (Task 9 depends on it).
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add CMakeLists.txt src/filereference.h src/filereference.cpp tests/tst_filereference.cpp
-git commit -m "Add file-reference regex extraction for QML/assert/QTest links"
+git commit -m "Add file-reference regex extraction for QML/assert links"
 ```
 
 ---
@@ -1890,6 +1910,8 @@ git commit -m "Add file-reference regex extraction for QML/assert/QTest links"
   } // namespace MultiFilterOutput
   ```
   `OutputTabWidget` is the concrete tab widget instantiated by `FilteredOutputPane` (Task 11): one for "All" (no `setJumpTarget` call — it *is* the jump target for the others) and one per enabled pattern (each gets `setJumpTarget(allTabWidget)`).
+
+**Note for the implementer:** `Utils::OutputFormatter`'s exact construction/lifetime pattern (whether it is held by value as a plain member, as here, or needs different setup) was not verified line-by-line against the reference tree during design. Cross-check against `Core::OutputWindow`'s constructor in `src/plugins/coreplugin/outputwindow.cpp` (the reference tree's canonical example of pairing an `OutputFormatter` with a `QPlainTextEdit`-derived widget) before relying on the shape below, and adjust `OutputTabWidget`'s member/construction if the real API differs — its public interface (constructor, `setLinkParser`, `appendLine`, `matchCount`, `setJumpTarget`, `matchCountChanged`) must not change, since Task 11 depends on exactly that.
 
 This task is UI/formatter-integration-heavy; `findFileReferences` is already unit-tested (Task 8), so this task is verified manually rather than with a new automated test — the "independently testable deliverable" is "a widget you can feed lines into and see clickable links + correct click behavior."
 
