@@ -18,6 +18,7 @@
 - All persisted data (Pattern Library, `FilterSetAspect`) must survive a Qt Creator restart.
 - Every regex pattern typed by the user is validated with `QRegularExpression::isValid()` before it can be saved — invalid patterns can never reach the matching code.
 - No cross-run history: switching the active run resets `FilteredOutputPane`'s tabs (per spec's Non-goals).
+- **Strict Qt Creator code style** (user directive, 2026-09-01): every `.h`/`.cpp` file this plan creates or modifies must conform to Qt Creator's own Coding Rules (https://doc-snapshots.qt.io/qtcreator-extending/coding-style.html), enforced mechanically via the project's `.clang-format` (copied from `c:\dev\qt-creator\.clang-format` to the plugin repo root — see Task 1). Concretely, and matching what `.clang-format` encodes: 4-space indentation, no tabs; opening brace of a function/class/struct body on its own line, but `namespace { ... }` braces stay on the same line as `namespace`; control-statement braces (`if`/`for`/`while`) never on their own line; pointer/reference bound to the type (`Foo *bar`, not `Foo* bar` or `Foo * bar`); 100-column limit; member variables prefixed `m_`; `#include` blocks sorted case-sensitively; braces required around every `if`/`for`/`while` body, even single statements. Every implementer must run `clang-format -i` (using the copied `.clang-format`) over every file it creates or touches as the last step before committing, if `clang-format` is available on PATH; if it is not available, format by hand to the same rules and say so in the task report. Task reviewers must check the diff against this rule and flag any deviation as an Important finding.
 
 ## Prerequisite (do this before Task 1)
 
@@ -266,7 +267,11 @@ if(QtCreatorExecutable)
 endif()
 ```
 
-- [ ] **Step 8: Configure and build**
+- [ ] **Step 8: Copy the Qt Creator `.clang-format` into the repo root**
+
+Per the Global Constraints' strict-code-style directive, copy `c:\dev\qt-creator\.clang-format` verbatim to `C:\dev\MultipleFiltersAppOutput\.clang-format` (do not edit its contents — it must match Qt Creator's own formatting exactly). Every file created in every later task must be run through `clang-format -i` (using this file) before being committed.
+
+- [ ] **Step 9: Configure and build**
 
 ```powershell
 cmake -S C:\dev\MultipleFiltersAppOutput -B C:\dev\MultipleFiltersAppOutput\build -G Ninja -DCMAKE_PREFIX_PATH="C:\dev\qt-creator-build" -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -275,14 +280,14 @@ cmake --build C:\dev\MultipleFiltersAppOutput\build
 
 Expected: build succeeds, producing `MultiFilterOutput.dll` (or `.so`) under the build tree's plugin output directory.
 
-- [ ] **Step 9: Manual verification — plugin loads**
+- [ ] **Step 10: Manual verification — plugin loads**
 
 Run the `RunQtCreator` target (or launch Qt Creator with `-pluginpath <build-output-dir>` manually), then open **Help > About Plugins…** and confirm `MultiFilterOutput` is listed and loaded without errors.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add CMakeLists.txt MultiFilterOutput.json.in src/
+git add CMakeLists.txt MultiFilterOutput.json.in .clang-format src/
 git commit -m "Add MultiFilterOutput plugin scaffold"
 ```
 
