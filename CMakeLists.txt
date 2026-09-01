@@ -58,6 +58,7 @@ add_qtc_plugin(MultiFilterOutput
     src/tablabel.cpp
     src/filteredoutputpane.h
     src/filteredoutputpane.cpp
+    MultiFilterOutput.qrc
 )
 
 target_include_directories(MultiFilterOutput PRIVATE src)

@@ -24,7 +24,9 @@ MultiFilterOutputPlugin::~MultiFilterOutputPlugin()
 void MultiFilterOutputPlugin::initialize()
 {
     Core::IOptionsPage::registerCategory(
-        Constants::OPTIONS_CATEGORY_ID, Tr::tr("MultiFilterOutput"), {});
+        Constants::OPTIONS_CATEGORY_ID,
+        Tr::tr("MultiFilterOutput"),
+        ":/multifilteroutput/images/MultiFilterOutput_24.png");
 
     m_settingsPage = new PatternLibrarySettingsPage;
     patternLibrary().load();

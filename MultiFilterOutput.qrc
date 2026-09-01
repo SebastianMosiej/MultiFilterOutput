@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/multifilteroutput">
+        <file>images/MultiFilterOutput_24.png</file>
+        <file>images/MultiFilterOutput_48.png</file>
+    </qresource>
+</RCC>
