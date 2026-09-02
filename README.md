@@ -41,6 +41,12 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
 - **Live match counts** — each tab's label updates as output streams in,
   e.g. `Errors (12)`; an inverted pattern's tab is prefixed, e.g.
   `Not: Debug (85)`.
+- **Focus on run start** — optionally, have MultiFilterOutput pop itself to the
+  front (instead of *Application Output*) the first time a newly-started run
+  produces output. Off by default; enable it from the Pattern Library
+  settings page. (If *Application Output*'s own "Open Application Output when
+  running" preference is set to **Always** rather than the default **On First
+  Output Only**, it can still reclaim focus on later output lines.)
 - **Click-to-jump** — click any line in a filtered tab to jump to and
   highlight that same line in **All**, recovering the surrounding context a
   filtered view strips away. Can be turned off from the Pattern Library
@@ -124,8 +130,9 @@ at the build output):
    run configurations can enable different subsets of the same library.
 3. **(Optional) Configure the pane.** Still on the Pattern Library settings
    page: pick where the pane's status-bar button sits (**Output Pane
-   Position**), and whether clicking a line in a pattern tab should jump to
-   **All** or just behave like a normal text click.
+   Position**), whether clicking a line in a pattern tab should jump to
+   **All** or just behave like a normal text click, and whether the pane
+   should take focus away from **Application Output** when a run starts.
 4. **Run your app.** A **MultiFilterOutput** button appears in the
    bottom-panel switcher next to **Application Output** (or at the end,
    per your position setting).

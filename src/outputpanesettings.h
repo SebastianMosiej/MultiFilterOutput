@@ -26,6 +26,13 @@ public:
     bool jumpToAllOnClick() const;
     void setJumpToAllOnClick(bool enabled);
 
+    // Whether FilteredOutputPane should pop itself to the front, with focus, the first time
+    // output arrives for a newly-started run -- read fresh by FilteredOutputPane at that
+    // moment (see FilteredOutputPane::onLineReceived), so like jumpToAllOnClick this needs no
+    // change signal.
+    bool focusPaneOnRunStart() const;
+    void setFocusPaneOnRunStart(bool enabled);
+
     void load();
 
 signals:
@@ -34,6 +41,7 @@ signals:
 private:
     OutputPanePlacement m_placement = OutputPanePlacement::NextToApplicationOutput;
     bool m_jumpToAllOnClick = true;
+    bool m_focusPaneOnRunStart = false;
 };
 
 MULTIFILTEROUTPUT_EXPORT OutputPaneSettings &outputPaneSettings();

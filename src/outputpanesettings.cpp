@@ -47,12 +47,32 @@ void OutputPaneSettings::setJumpToAllOnClick(bool enabled)
     settings->sync();
 }
 
+bool OutputPaneSettings::focusPaneOnRunStart() const
+{
+    return m_focusPaneOnRunStart;
+}
+
+void OutputPaneSettings::setFocusPaneOnRunStart(bool enabled)
+{
+    if (m_focusPaneOnRunStart == enabled)
+        return;
+    m_focusPaneOnRunStart = enabled;
+
+    Utils::QtcSettings *settings = Core::ICore::settings();
+    settings->beginGroup(Constants::SETTINGS_GROUP);
+    settings->setValue(Constants::FOCUS_PANE_ON_RUN_START_KEY, enabled);
+    settings->endGroup();
+    settings->sync();
+}
+
 void OutputPaneSettings::load()
 {
     Utils::QtcSettings *settings = Core::ICore::settings();
     settings->beginGroup(Constants::SETTINGS_GROUP);
     const bool atEnd = settings->value(Constants::OUTPUT_PANE_PLACEMENT_KEY, false).toBool();
     m_jumpToAllOnClick = settings->value(Constants::JUMP_TO_ALL_ON_CLICK_KEY, true).toBool();
+    m_focusPaneOnRunStart =
+        settings->value(Constants::FOCUS_PANE_ON_RUN_START_KEY, false).toBool();
     settings->endGroup();
     m_placement = atEnd ? OutputPanePlacement::AtEnd : OutputPanePlacement::NextToApplicationOutput;
 }

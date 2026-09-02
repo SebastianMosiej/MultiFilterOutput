@@ -109,6 +109,16 @@ public:
             outputPaneSettings().setJumpToAllOnClick(checked);
         });
 
+        auto *focusOnRunStartCheck = new QCheckBox(
+            Tr::tr("Show MultiFilterOutput instead of Application Output when a run starts"),
+            this);
+        focusOnRunStartCheck->setChecked(outputPaneSettings().focusPaneOnRunStart());
+        // Also persists immediately and takes effect on the next run -- see
+        // FilteredOutputPane::onLineReceived(), which reads this fresh for each new run.
+        connect(focusOnRunStartCheck, &QCheckBox::toggled, this, [](bool checked) {
+            outputPaneSettings().setFocusPaneOnRunStart(checked);
+        });
+
         m_tree = new PatternTreeWidget(this);
         m_tree->setColumnCount(6);
         m_tree->setHeaderLabels(
@@ -208,6 +218,7 @@ public:
         auto *layout = new QVBoxLayout(this);
         layout->addWidget(placementGroup);
         layout->addWidget(jumpToAllCheck);
+        layout->addWidget(focusOnRunStartCheck);
         layout->addLayout(topRow);
         layout->addLayout(form);
 

@@ -68,6 +68,9 @@ private:
     QList<PatternTab> m_patternTabs;
     QLabel *m_runLabel = nullptr;
     qreal m_fontZoom = 0;
+    // Set whenever a new run becomes active; cleared the moment this pane pops itself for
+    // that run's first line of output (see onLineReceived()) -- so at most one pop per run.
+    bool m_popOnNextLine = false;
 };
 
 } // namespace MultiFilterOutput::Internal

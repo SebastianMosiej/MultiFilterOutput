@@ -92,6 +92,10 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     // the source-block mapping and the formatter's carry-over buffer stale.
     m_allTab->reset();
 
+    // Arm the run-start pop for this run's first line (see onLineReceived()); a run going
+    // away (activeRunControl == nullptr) has no "first line" left to pop on.
+    m_popOnNextLine = activeRunControl != nullptr;
+
     if (m_runLabel) {
         m_runLabel->setText(
             activeRunControl ? Tr::tr("Filtering: %1 (pid %2)")
@@ -183,6 +187,16 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
 {
     if (!m_allTab)
         return;
+
+    if (m_popOnNextLine) {
+        m_popOnNextLine = false;
+        // Mirrors Application Output's own default "pop on first output" trigger, so this
+        // call -- reaching OutputPaneManager after Application Output's, since RunTracker
+        // connects to RunControl::appendMessage later than AppOutputPane does -- is the one
+        // that ends up deciding which pane is actually shown for this run.
+        if (outputPaneSettings().focusPaneOnRunStart())
+            popup(Core::IOutputPane::NoModeSwitch | Core::IOutputPane::WithFocus);
+    }
 
     // The "All" tab is the jump target, so its block number for this line is what every
     // matching pattern tab must record -- not each tab's own (identity) block index.
