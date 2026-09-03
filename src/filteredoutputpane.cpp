@@ -5,6 +5,7 @@
 #include "multifilteroutputconstants.h"
 #include "multifilteroutputtr.h"
 #include "outputpanesettings.h"
+#include "outputpanetabbar.h"
 #include "outputtabwidget.h"
 #include "patternlibrary.h"
 #include "tablabel.h"
@@ -15,10 +16,10 @@
 #include <projectexplorer/runcontrol.h>
 
 #include <utils/qtcsettings.h>
+#include <utils/theme/theme.h>
 
 #include <QLabel>
 #include <QTabBar>
-#include <QTabWidget>
 #include <QVBoxLayout>
 
 using namespace ProjectExplorer;
@@ -53,7 +54,8 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
 {
     if (!m_container) {
         m_container = new QWidget(parent);
-        m_tabWidget = new QTabWidget(m_container);
+        m_tabWidget = new OutputPaneTabWidget(m_container);
+        styleTabBar();
 
         m_allTab = new OutputTabWidget(m_tabWidget);
         m_allTab->setFontZoom(m_fontZoom);
@@ -138,6 +140,20 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
         m_tabWidget->addTab(tab, tabLabel(pattern, 0));
         updateTabLabel(pattern, tab, 0);
     }
+}
+
+void FilteredOutputPane::styleTabBar()
+{
+    if (!m_tabWidget)
+        return;
+
+    // The tab bar itself (an OutputPaneTabBar) paints its own background and text; this just
+    // matches the pane's own background -- visible in the thin strip around the tab bar -- to
+    // the same color so nothing native shows through.
+    const QColor background = Utils::creatorTheme()->color(Utils::Theme::PaletteBase);
+    m_tabWidget->setStyleSheet(
+        QStringLiteral("QTabWidget::pane { background: %1; border: none; }")
+            .arg(background.name()));
 }
 
 void FilteredOutputPane::onTabZoomChanged(qreal zoom)

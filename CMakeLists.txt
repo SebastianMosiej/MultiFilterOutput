@@ -53,6 +53,8 @@ add_qtc_plugin(MultiFilterOutput
     src/filereference.cpp
     src/multifilterlineparser.h
     src/multifilterlineparser.cpp
+    src/outputpanetabbar.h
+    src/outputpanetabbar.cpp
     src/outputtabwidget.h
     src/outputtabwidget.cpp
     src/runtracker.h

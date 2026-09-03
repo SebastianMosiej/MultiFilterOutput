@@ -9,7 +9,6 @@
 
 QT_BEGIN_NAMESPACE
 class QLabel;
-class QTabWidget;
 QT_END_NAMESPACE
 
 namespace ProjectExplorer {
@@ -17,6 +16,7 @@ class RunControl;
 }
 
 namespace MultiFilterOutput {
+class OutputPaneTabWidget;
 class OutputTabWidget;
 }
 
@@ -46,6 +46,9 @@ private:
     void onLineReceived(const QString &line, Utils::OutputFormat format);
     void onJumpRequested(int sourceBlockNumber);
     void updateTabLabel(const Pattern &pattern, OutputTabWidget *tab, int count);
+    // Matches the tab widget's pane background to OutputPaneTabBar's own painted background
+    // (see outputpanetabbar.h) so nothing native shows through around the tab bar.
+    void styleTabBar();
     // Keeps every tab in this pane at the same zoom level: applied whenever a tab is
     // (re)created, and re-broadcast to every other tab (and persisted) whenever any one tab's
     // own wheelEvent() changes it.
@@ -63,7 +66,7 @@ private:
 
     RunTracker *m_runTracker;
     QWidget *m_container = nullptr;
-    QTabWidget *m_tabWidget = nullptr;
+    OutputPaneTabWidget *m_tabWidget = nullptr;
     OutputTabWidget *m_allTab = nullptr;
     QList<PatternTab> m_patternTabs;
     QLabel *m_runLabel = nullptr;

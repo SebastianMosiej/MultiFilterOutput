@@ -36,7 +36,14 @@ Pattern Pattern::fromMap(const QVariantMap &map)
     p.isRegex = map.value("isRegex", true).toBool();
     p.caseSensitive = map.value("caseSensitive", false).toBool();
     p.invert = map.value("invert", false).toBool();
-    p.color = map.value("color", QColor(Qt::gray)).value<QColor>();
+    p.color = map.value("color").value<QColor>();
+    // Older releases defaulted every pattern to an explicit QColor(Qt::gray) instead of "no
+    // tint" (see pattern.h), so that sentinel is already persisted for any pattern nobody
+    // deliberately colored -- indistinguishable on disk from an intentional choice, but the
+    // same value across every never-customized pattern makes it safe to treat as legacy and
+    // migrate back to unset.
+    if (p.color == QColor(Qt::gray))
+        p.color = QColor();
     p.groupContinuationLines = map.value("groupContinuationLines", false).toBool();
     p.continuationPattern = map.value("continuationPattern", QStringLiteral("^ {1,3}")).toString();
     return p;

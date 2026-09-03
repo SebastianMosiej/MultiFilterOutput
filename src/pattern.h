@@ -17,7 +17,9 @@ public:
     bool isRegex = true;
     bool caseSensitive = false;
     bool invert = false;
-    QColor color = QColor(Qt::gray);
+    // Invalid (the default) means "no tint" -- the tab keeps the pane's normal text color;
+    // see FilteredOutputPane::updateTabLabel().
+    QColor color;
     // When set, a line that doesn't itself match patternText is still swept into this
     // pattern's tab -- without counting as a match -- as long as it matches
     // continuationPattern (always a regex), starting right after a line that did match.

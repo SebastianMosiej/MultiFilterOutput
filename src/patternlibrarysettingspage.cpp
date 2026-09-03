@@ -277,7 +277,12 @@ private:
         item->setText(InvertColumn, p.invert ? checkMark : QString());
         for (int column : {RegexColumn, CaseColumn, InvertColumn, ColorColumn})
             item->setTextAlignment(column, Qt::AlignCenter);
-        item->setBackground(ColorColumn, p.color);
+        // An invalid color (no tint chosen) should leave the swatch column showing the tree's
+        // normal row background, not an arbitrary brush built from an invalid QColor.
+        if (p.color.isValid())
+            item->setBackground(ColorColumn, p.color);
+        else
+            item->setData(ColorColumn, Qt::BackgroundRole, QVariant());
     }
 
     QTreeWidgetItem *itemForId(const QString &id) const
@@ -401,7 +406,7 @@ private:
             m_invertCheck->setChecked(false);
             m_groupContinuationCheck->setChecked(false);
             m_continuationPatternEdit->setText(Pattern().continuationPattern);
-            m_currentColor = QColor(Qt::gray);
+            m_currentColor = QColor();
             updateColorButton();
             m_errorLabel->clear();
             m_updatingFields = false;
@@ -434,8 +439,12 @@ private:
 
     void updateColorButton()
     {
+        // Invalid means "no tint chosen yet"; leave the button's normal appearance rather
+        // than painting it as if gray had been explicitly picked.
         m_colorButton->setStyleSheet(
-            QStringLiteral("background-color: %1;").arg(m_currentColor.name()));
+            m_currentColor.isValid()
+                ? QStringLiteral("background-color: %1;").arg(m_currentColor.name())
+                : QString());
     }
 
     void pickColor()
@@ -515,7 +524,7 @@ private:
     QPushButton *m_moveDownButton;
     QList<Pattern> m_workingPatterns;
     QString m_currentId;
-    QColor m_currentColor = QColor(Qt::gray);
+    QColor m_currentColor;
     bool m_updatingFields = false;
 };
 
