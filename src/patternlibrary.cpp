@@ -73,6 +73,8 @@ void PatternLibrary::load()
             map.insert("groupContinuationLines", settings->value("groupContinuationLines"));
         if (settings->contains("continuationPattern"))
             map.insert("continuationPattern", settings->value("continuationPattern"));
+        if (settings->contains("isDefault"))
+            map.insert("isDefault", settings->value("isDefault"));
         m_patterns.append(Pattern::fromMap(map));
     }
     settings->endArray();
@@ -100,6 +102,7 @@ void PatternLibrary::save() const
         settings->setValue("color", map.value("color"));
         settings->setValue("groupContinuationLines", map.value("groupContinuationLines"));
         settings->setValue("continuationPattern", map.value("continuationPattern"));
+        settings->setValue("isDefault", map.value("isDefault"));
     }
     settings->endArray();
 

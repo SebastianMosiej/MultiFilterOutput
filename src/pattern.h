@@ -26,6 +26,9 @@ public:
     // Sweeping stops at the first line that doesn't match continuationPattern.
     bool groupContinuationLines = false;
     QString continuationPattern = QStringLiteral("^ {1,3}");
+    // When set, FilterSetAspect enables this pattern by default for every newly created run
+    // configuration (not for ones already saved -- see FilterSetAspect::FilterSetAspect()).
+    bool isDefault = false;
 
     static Pattern createNew();
     QVariantMap toMap() const;

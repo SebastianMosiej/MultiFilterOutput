@@ -35,7 +35,15 @@ namespace MultiFilterOutput::Internal {
 
 namespace {
 
-enum Column { NameColumn, PatternColumn, RegexColumn, CaseColumn, InvertColumn, ColorColumn };
+enum Column {
+    NameColumn,
+    PatternColumn,
+    RegexColumn,
+    CaseColumn,
+    InvertColumn,
+    ColorColumn,
+    DefaultColumn
+};
 
 // QTreeWidget's internal-move drag-and-drop reorders items without a documented, reliable
 // signal to hook (rowsMoved isn't guaranteed for internal moves). Overriding dropEvent lets
@@ -120,10 +128,10 @@ public:
         });
 
         m_tree = new PatternTreeWidget(this);
-        m_tree->setColumnCount(6);
+        m_tree->setColumnCount(7);
         m_tree->setHeaderLabels(
             {Tr::tr("Name"), Tr::tr("Pattern"), Tr::tr("Regex"), Tr::tr("Case"),
-             Tr::tr("Invert"), Tr::tr("Color")});
+             Tr::tr("Invert"), Tr::tr("Color"), Tr::tr("Default")});
         m_tree->setRootIsDecorated(false);
         m_tree->setUniformRowHeights(true);
         m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -166,6 +174,8 @@ public:
         m_regexCheck = new QCheckBox(Tr::tr("Regular expression"), this);
         m_caseSensitiveCheck = new QCheckBox(Tr::tr("Case sensitive"), this);
         m_invertCheck = new QCheckBox(Tr::tr("Exclude matching lines (invert)"), this);
+        m_defaultCheck = new QCheckBox(
+            Tr::tr("Active by default for new run configurations"), this);
         m_groupContinuationCheck = new QCheckBox(Tr::tr("Group continuation lines"), this);
         m_continuationPatternEdit = new QLineEdit(Pattern().continuationPattern, this);
         m_colorButton = new QPushButton(Tr::tr("Choose..."), this);
@@ -190,6 +200,7 @@ public:
         connect(m_regexCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_caseSensitiveCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_invertCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
+        connect(m_defaultCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_groupContinuationCheck, &QCheckBox::toggled, this, [this](bool) {
             updateContinuationFieldEnabled();
             fieldEdited();
@@ -210,6 +221,7 @@ public:
         form->addRow(m_regexCheck);
         form->addRow(m_caseSensitiveCheck);
         form->addRow(m_invertCheck);
+        form->addRow(m_defaultCheck);
         form->addRow(continuationCheckRow);
         form->addRow(Tr::tr("Continuation line starts with:"), m_continuationPatternEdit);
         form->addRow(Tr::tr("Tab color:"), m_colorButton);
@@ -275,7 +287,8 @@ private:
         item->setText(RegexColumn, p.isRegex ? checkMark : QString());
         item->setText(CaseColumn, p.caseSensitive ? checkMark : QString());
         item->setText(InvertColumn, p.invert ? checkMark : QString());
-        for (int column : {RegexColumn, CaseColumn, InvertColumn, ColorColumn})
+        item->setText(DefaultColumn, p.isDefault ? checkMark : QString());
+        for (int column : {RegexColumn, CaseColumn, InvertColumn, ColorColumn, DefaultColumn})
             item->setTextAlignment(column, Qt::AlignCenter);
         // An invalid color (no tint chosen) should leave the swatch column showing the tree's
         // normal row background, not an arbitrary brush built from an invalid QColor.
@@ -311,6 +324,7 @@ private:
         m_regexCheck->setEnabled(enabled);
         m_caseSensitiveCheck->setEnabled(enabled);
         m_invertCheck->setEnabled(enabled);
+        m_defaultCheck->setEnabled(enabled);
         m_groupContinuationCheck->setEnabled(enabled);
         m_colorButton->setEnabled(enabled);
         m_removeButton->setEnabled(enabled);
@@ -404,6 +418,7 @@ private:
             m_regexCheck->setChecked(false);
             m_caseSensitiveCheck->setChecked(false);
             m_invertCheck->setChecked(false);
+            m_defaultCheck->setChecked(false);
             m_groupContinuationCheck->setChecked(false);
             m_continuationPatternEdit->setText(Pattern().continuationPattern);
             m_currentColor = QColor();
@@ -428,6 +443,7 @@ private:
         m_regexCheck->setChecked(pattern->isRegex);
         m_caseSensitiveCheck->setChecked(pattern->caseSensitive);
         m_invertCheck->setChecked(pattern->invert);
+        m_defaultCheck->setChecked(pattern->isDefault);
         m_groupContinuationCheck->setChecked(pattern->groupContinuationLines);
         m_continuationPatternEdit->setText(pattern->continuationPattern);
         updateColorButton();
@@ -493,6 +509,7 @@ private:
         updated.isRegex = m_regexCheck->isChecked();
         updated.caseSensitive = m_caseSensitiveCheck->isChecked();
         updated.invert = m_invertCheck->isChecked();
+        updated.isDefault = m_defaultCheck->isChecked();
         updated.groupContinuationLines = m_groupContinuationCheck->isChecked();
         updated.continuationPattern = m_continuationPatternEdit->text();
         updated.color = m_currentColor;
@@ -515,6 +532,7 @@ private:
     QCheckBox *m_regexCheck;
     QCheckBox *m_caseSensitiveCheck;
     QCheckBox *m_invertCheck;
+    QCheckBox *m_defaultCheck;
     QCheckBox *m_groupContinuationCheck;
     QLineEdit *m_continuationPatternEdit;
     QPushButton *m_colorButton;

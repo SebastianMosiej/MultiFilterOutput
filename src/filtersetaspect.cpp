@@ -32,6 +32,17 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
     setDisplayName(Tr::tr("Output Filters"));
     setSettingsKey(Constants::FILTER_SET_ASPECT_ID);
 
+    // Seeds a brand-new run configuration with every pattern marked Pattern::isDefault.
+    // RunConfigurationFactory::create() (used for genuinely new run configurations) never
+    // calls fromMap() on its aspects -- only RunConfigurationFactory::restore() (loading an
+    // already-saved one) does -- so this constructor-time seed only ever affects a run
+    // configuration that has never been saved before; fromMap() unconditionally overwrites it
+    // for anything restored from disk.
+    for (const Pattern &pattern : patternLibrary().patterns()) {
+        if (pattern.isDefault)
+            m_enabledPatternIds.append(pattern.id);
+    }
+
     // The Run Settings page renders each RunConfiguration aspect via
     // createConfigWidget(), which only returns non-null once a creator is set here --
     // addToLayoutImpl() is for the generic AspectContainer::layouter() path (e.g. Options

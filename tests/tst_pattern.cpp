@@ -12,6 +12,7 @@ private slots:
     void roundTripsThroughMap();
     void createNewGeneratesUniqueIds();
     void continuationFieldsDefaultAndRoundTrip();
+    void isDefaultDefaultsFalseAndRoundTrips();
 };
 
 void tst_Pattern::roundTripsThroughMap()
@@ -50,6 +51,16 @@ void tst_Pattern::continuationFieldsDefaultAndRoundTrip()
     const Pattern restored = Pattern::fromMap(p.toMap());
     QCOMPARE(restored.groupContinuationLines, p.groupContinuationLines);
     QCOMPARE(restored.continuationPattern, p.continuationPattern);
+}
+
+void tst_Pattern::isDefaultDefaultsFalseAndRoundTrips()
+{
+    QCOMPARE(Pattern().isDefault, false);
+
+    Pattern p;
+    p.isDefault = true;
+    const Pattern restored = Pattern::fromMap(p.toMap());
+    QCOMPARE(restored.isDefault, true);
 }
 
 void tst_Pattern::createNewGeneratesUniqueIds()

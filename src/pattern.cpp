@@ -24,6 +24,7 @@ QVariantMap Pattern::toMap() const
         {"color", color},
         {"groupContinuationLines", groupContinuationLines},
         {"continuationPattern", continuationPattern},
+        {"isDefault", isDefault},
     };
 }
 
@@ -46,6 +47,7 @@ Pattern Pattern::fromMap(const QVariantMap &map)
         p.color = QColor();
     p.groupContinuationLines = map.value("groupContinuationLines", false).toBool();
     p.continuationPattern = map.value("continuationPattern", QStringLiteral("^ {1,3}")).toString();
+    p.isDefault = map.value("isDefault", false).toBool();
     return p;
 }
 
