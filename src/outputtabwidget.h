@@ -86,6 +86,10 @@ private:
     int m_matchCount = 0;
     // The point size setBaseFont() was last given, i.e. the size fontZoom() is relative to.
     qreal m_baseFontSize = 0;
+    // Whether the view sticks to the end of the log as lines arrive: true while the vertical
+    // scroll bar sits at the bottom, false once the user scrolls anywhere else, and true
+    // again when they scroll back down to the bottom.
+    bool m_followTail = true;
 };
 
 } // namespace MultiFilterOutput

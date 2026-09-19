@@ -11,6 +11,7 @@
 
 #include <QAbstractScrollArea>
 #include <QMouseEvent>
+#include <QScrollBar>
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QWheelEvent>
@@ -42,6 +43,19 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
         &Utils::OutputFormatter::openInEditorRequested,
         this,
         [](const Utils::Link &link) { Core::EditorManager::openEditorAt(link); });
+
+    // Follow the end of the log like Application Output does. Any scroll -- the user's, or
+    // scrollToBlock()'s -- decides whether we keep following: leaving the bottom stops it,
+    // returning to the bottom resumes it. Appended lines (and resizes/zoom) only grow the
+    // range, so while following, snap back to the new bottom whenever the range changes.
+    QScrollBar *bar = verticalScrollBar();
+    connect(bar, &QScrollBar::valueChanged, this, [this, bar](int value) {
+        m_followTail = value >= bar->maximum();
+    });
+    connect(bar, &QScrollBar::rangeChanged, this, [this, bar](int, int max) {
+        if (m_followTail)
+            bar->setValue(max);
+    });
 }
 
 void OutputTabWidget::setLinkParser(ProjectExplorer::Project *project)
@@ -88,6 +102,7 @@ void OutputTabWidget::reset()
     m_formatter.clear();
     m_sourceBlockNumbers.clear();
     m_matchCount = 0;
+    m_followTail = true;
     emit matchCountChanged(m_matchCount);
 }
 
