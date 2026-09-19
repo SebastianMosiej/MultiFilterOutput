@@ -38,6 +38,10 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
 - **Synced, persisted zoom** — Ctrl+wheel zooms a tab; every other tab in
   the same pane (the **All** tab and every pattern tab) follows to the same
   size, across new runs and across Qt Creator restarts.
+- **Follows the tail** — every tab stays pinned to the newest line as
+  output streams in, the way *Application Output* does. Scroll up and it
+  stops following, so a log that is still growing doesn't yank the view out
+  from under you; scroll back to the bottom and it resumes.
 - **Live match counts** — each tab's label updates as output streams in,
   e.g. `Errors (12)`; an inverted pattern's tab is prefixed, e.g.
   `Not: Debug (85)`.
@@ -77,7 +81,8 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   `QtCreator` CMake package.
 - Qt 6 (Widgets module), matching the Qt version that Qt Creator tree was
   itself built with.
-- CMake 3.16+.
+- CMake 3.16+, or 3.22+ to build the unit tests (they rely on the
+  `ENVIRONMENT_MODIFICATION` test property).
 - A C++20 compiler (tested with MSVC 2022 on Windows).
 
 ## Building
@@ -99,15 +104,33 @@ generated `RunQtCreator` target (available whenever CMake can locate a
 `qtcreator` executable next to the `QtCreator::Core` package it configured
 against).
 
-## Enabling the plugin
+## Installing and enabling the plugin
 
-MultiFilterOutput ships **disabled by default**. After installing it into
-your Qt Creator plugins directory (or launching with `-pluginpath` pointed
-at the build output):
+MultiFilterOutput ships **disabled by default**.
+
+First put `MultiFilterOutput.dll` somewhere Qt Creator looks. The user
+plugin directory needs no write access to the Qt Creator installation and
+survives reinstalling it — on Windows:
+
+```
+%LOCALAPPDATA%\QtProject\qtcreator\plugins\20.0.82\
+```
+
+That last directory is named after the **plugin API version** (`20.0.82`),
+not the `21.0.0-beta1` display version — Qt Creator scans
+`<major>.<minor>.<patch>` directories down to its own compatibility
+version. Alternatively, launch Qt Creator with `-pluginpath` pointed at the
+build output, which is what the `RunQtCreator` target does.
+
+Then:
 
 1. Open **Help > About Plugins…**
 2. Find **MultiFilterOutput** in the list and check it.
 3. Restart Qt Creator.
+
+If the plugin is listed but cannot be enabled, and the error mentions an
+unresolved dependency on `core`, it was built against a different Qt
+Creator version — see **Requirements**.
 
 ## Usage
 
