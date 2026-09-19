@@ -68,6 +68,14 @@ add_qtc_plugin(MultiFilterOutput
 
 target_include_directories(MultiFilterOutput PRIVATE src)
 
+# Where the Qt Creator we build against keeps its binaries. LOCATION is the imported
+# Core.dll/.so/.dylib under <prefix>/lib/qtcreator/plugins, so <prefix> is three levels up.
+# Used both to find the qtcreator executable for the Run button and to put Qt Creator's own
+# libraries on the tests' PATH below.
+get_target_property(QtCreatorCorePath QtCreator::Core LOCATION)
+get_filename_component(QtCreatorPluginDir "${QtCreatorCorePath}" DIRECTORY)
+get_filename_component(QtCreatorPrefix "${QtCreatorPluginDir}/../../.." ABSOLUTE)
+
 if(WITH_TESTS)
   add_qtc_test(tst_pattern
     SOURCES tests/tst_pattern.cpp
@@ -97,13 +105,38 @@ if(WITH_TESTS)
     SOURCES tests/tst_tablabel.cpp
     DEPENDS MultiFilterOutput
   )
+
+  # add_qtc_test() bakes a fixed PATH into each test's ENVIRONMENT property (see
+  # finalize_test_setup() in QtCreatorAPIInternal.cmake). That PATH covers this project's
+  # own binary dir and Qt, but not the Qt Creator installation the tests link against --
+  # for an in-tree plugin those are the same directory, for an out-of-tree one they are
+  # not. Without this every test aborts at load time with STATUS_DLL_NOT_FOUND
+  # (0xC0000135) before a single case runs. ENVIRONMENT_MODIFICATION is applied after
+  # ENVIRONMENT, so this prepends to what add_qtc_test() already set rather than
+  # replacing it.
+  if(WIN32)
+    set(QtCreatorRuntimeDirs "${QtCreatorPluginDir}" "${QtCreatorPrefix}/bin")
+    set(QtCreatorPathModification "")
+    foreach(dir IN LISTS QtCreatorRuntimeDirs)
+      list(APPEND QtCreatorPathModification "PATH=path_list_prepend:${dir}")
+    endforeach()
+    set_tests_properties(
+      tst_pattern
+      tst_linematcher
+      tst_linebuffer
+      tst_patternlibrary
+      tst_filtersetaspect
+      tst_filereference
+      tst_tablabel
+      PROPERTIES ENVIRONMENT_MODIFICATION "${QtCreatorPathModification}"
+    )
+  endif()
 endif()
 
 # Enable the Run button in Qt Creator
-get_target_property(QtCreatorCorePath QtCreator::Core LOCATION)
 find_program(QtCreatorExecutable
   NAMES qtcreator "Qt Creator"
-  PATHS "${QtCreatorCorePath}/../../../bin" "${QtCreatorCorePath}/../../../MacOS"
+  PATHS "${QtCreatorPrefix}/bin" "${QtCreatorPrefix}/MacOS"
   NO_DEFAULT_PATH
 )
 if(QtCreatorExecutable)

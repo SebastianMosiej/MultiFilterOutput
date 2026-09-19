@@ -5,7 +5,6 @@
 #include <coreplugin/editormanager/editormanager.h>
 
 #include <texteditor/fontsettings.h>
-#include <texteditor/texteditorsettings.h>
 
 #include <utils/link.h>
 
@@ -27,12 +26,12 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
 
     // Match Application Output's font, including live updates when the user changes it in
     // Preferences > Text Editor > Font & Colors -- Core::OutputWindow follows the same setting.
-    setBaseFont(TextEditor::TextEditorSettings::fontSettings().font());
+    setBaseFont(TextEditor::globalFontSettings().data().font());
     connect(
-        TextEditor::TextEditorSettings::instance(),
-        &TextEditor::TextEditorSettings::fontSettingsChanged,
+        &TextEditor::globalFontSettings(),
+        &TextEditor::FontSettings::changed,
         this,
-        [this] { setBaseFont(TextEditor::TextEditorSettings::fontSettings().font()); });
+        [this] { setBaseFont(TextEditor::globalFontSettings().data().font()); });
 
     // An absolute "file://" link is resolved by OutputFormatter itself (see
     // Utils::OutputFormatter::handleFileLink()) rather than being forwarded to the line

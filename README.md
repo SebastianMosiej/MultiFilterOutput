@@ -67,9 +67,14 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
 
 ## Requirements
 
-- A Qt Creator source/build tree whose `Core`/`ProjectExplorer`/`TextEditor`
-  API version matches what this plugin is built against (out-of-tree
-  plugins are tied to the exact Qt Creator version they compile against).
+- **Qt Creator 21** (`21.0.0-beta1`, plugin API version `20.0.82`). The
+  plugin is built against the `21.0` branch and will not load into Qt
+  Creator 20 or earlier: out-of-tree plugins are tied to the exact
+  `Core`/`ProjectExplorer`/`TextEditor` API version they compile against,
+  and a mismatch is reported as an unresolved dependency on `core`.
+- A Qt Creator source/build tree of that version — an end-user Qt Creator
+  *installation* is not enough, since it ships no headers and no exported
+  `QtCreator` CMake package.
 - Qt 6 (Widgets module), matching the Qt version that Qt Creator tree was
   itself built with.
 - CMake 3.16+.
@@ -87,7 +92,7 @@ cmake --build <this-repo>\build --config RelWithDebInfo
 
 The plugin DLL is produced under `build\lib\qtcreator\plugins\<config>\`.
 To build the unit tests as well, add `-DWITH_TESTS=ON` to the configure
-step and build the individual `tst_*` targets.
+step; run them with `ctest` from the build directory.
 
 To launch Qt Creator with the freshly-built plugin loaded, build the
 generated `RunQtCreator` target (available whenever CMake can locate a
