@@ -8,14 +8,18 @@
 #include <coreplugin/ioutputpane.h>
 
 #include <QList>
+#include <QPointer>
 
 QT_BEGIN_NAMESPACE
 class QLabel;
+class QMenu;
+class QPoint;
 class QToolButton;
 QT_END_NAMESPACE
 
 namespace ProjectExplorer {
 class Project;
+class RunConfiguration;
 class RunControl;
 }
 
@@ -50,16 +54,28 @@ public:
 
 private:
     void rebuildTabs(ProjectExplorer::RunControl *activeRunControl);
-    // The patterns a run's configuration enabled, in Pattern Library order.
-    QList<Pattern> enabledPatterns(ProjectExplorer::RunControl *runControl) const;
+    // The pattern ids a run's configuration had enabled when it was launched.
+    QStringList launchPatternIds(ProjectExplorer::RunControl *runControl) const;
+    // The patterns filtering the active run (m_runPatternIds), in Pattern Library order.
+    QList<Pattern> runPatterns() const;
+    // The RunConfiguration a run was started from, if it can be identified unambiguously.
+    ProjectExplorer::RunConfiguration *launchedRunConfiguration(
+        ProjectExplorer::RunControl *runControl) const;
+    // Toggles a pattern for the active run -- and, like Run Settings > Output Filters, for the
+    // run configuration it was started from.
+    void setPatternEnabledForRun(const QString &id, bool enabled);
+    // The "which patterns filter this run" menu: the tab bar's context menu and the
+    // Patterns toolbar button.
+    void showPatternsMenu(const QPoint &globalPos);
+    void fillPatternsMenu(QMenu *menu);
     void removePatternTabs();
     void createPatternTabs(ProjectExplorer::Project *project, const QList<Pattern> &patterns);
     // Appends one line to every pattern tab it belongs in (All already has it, as allLine);
     // returns whether any pattern matched it.
     bool routeToPatternTabs(const QString &line, Utils::OutputFormat format, int allLine);
-    // Rebuilds the pattern tabs when this run's patterns were edited, and replays All
-    // through them.
-    void onPatternsChanged();
+    // Rebuilds the pattern tabs when this run's patterns changed -- edited in the library,
+    // or toggled from the pane -- and replays All through them.
+    void refreshPatternTabs();
     OutputTabWidget *currentTab() const;
     // Toolbar: pane-wide zoom by `points` (zoom buttons and shortcuts), copy and save the
     // current tab, and the word-wrap setting applied to a tab.
@@ -114,6 +130,12 @@ private:
     QToolButton *m_copyButton = nullptr;
     QToolButton *m_saveButton = nullptr;
     QToolButton *m_saveFilterButton = nullptr;
+    QToolButton *m_patternsButton = nullptr;
+    // The patterns filtering the active run: its launch-time selection, as toggled since
+    // from the pane.
+    QStringList m_runPatternIds;
+    // The run m_runPatternIds belongs to (see rebuildTabs()).
+    QPointer<ProjectExplorer::RunControl> m_runPatternIdsRun;
     // The active run's applicationProcessHandleChanged -> updateRunLabel() connection.
     QMetaObject::Connection m_pidConnection;
     qreal m_fontZoom = 0;

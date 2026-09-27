@@ -14,7 +14,9 @@
 #include <coreplugin/icore.h>
 #include <coreplugin/messagemanager.h>
 
+#include <projectexplorer/buildconfiguration.h>
 #include <projectexplorer/project.h>
+#include <projectexplorer/runconfiguration.h>
 #include <projectexplorer/runcontrol.h>
 
 #include <utils/fileutils.h>
@@ -26,6 +28,7 @@
 #include <QGuiApplication>
 #include <QInputDialog>
 #include <QLabel>
+#include <QMenu>
 #include <QMessageBox>
 #include <QRegularExpression>
 #include <QToolButton>
@@ -76,7 +79,7 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
         &patternLibrary(),
         &PatternLibrary::patternsChanged,
         this,
-        &FilteredOutputPane::onPatternsChanged);
+        &FilteredOutputPane::refreshPatternTabs);
 
     // Word wrap and zoom from the toolbar (and the zoom shortcuts), for every tab.
     connect(&outputPaneSettings(), &OutputPaneSettings::wordWrapChanged, this, [this](bool enabled) {
@@ -117,6 +120,15 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
         // The quick filter applies to the current tab, so re-apply it to whichever becomes
         // current (a no-op for a tab that already has it).
         connect(m_tabWidget, &QTabWidget::currentChanged, this, &FilteredOutputPane::updateFilter);
+        // Right-click the tabs to choose which patterns filter this run.
+        m_tabWidget->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(
+            m_tabWidget->tabBar(),
+            &QWidget::customContextMenuRequested,
+            this,
+            [this](const QPoint &pos) {
+                showPatternsMenu(m_tabWidget->tabBar()->mapToGlobal(pos));
+            });
         setFilteringEnabled(true);
 
         m_allTab = new OutputTabWidget(m_tabWidget);
@@ -157,6 +169,17 @@ QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
         m_copyButton->setToolTip(Tr::tr("Copy the current tab's contents"));
         connect(m_copyButton, &QToolButton::clicked, self, &FilteredOutputPane::copyCurrentTab);
 
+        self->m_patternsButton = new QToolButton;
+        m_patternsButton->setText(Tr::tr("Patterns"));
+        m_patternsButton->setToolTip(
+            Tr::tr("Choose which patterns filter this run (also right-click the tabs)"));
+        m_patternsButton->setPopupMode(QToolButton::InstantPopup);
+        auto *patternsMenu = new QMenu(m_patternsButton);
+        connect(patternsMenu, &QMenu::aboutToShow, self, [self, patternsMenu] {
+            self->fillPatternsMenu(patternsMenu);
+        });
+        m_patternsButton->setMenu(patternsMenu);
+
         self->m_saveFilterButton = new QToolButton;
         m_saveFilterButton->setText(Tr::tr("Save as Pattern..."));
         m_saveFilterButton->setToolTip(
@@ -171,8 +194,9 @@ QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
         connect(m_saveButton, &QToolButton::clicked, self, &FilteredOutputPane::saveCurrentTab);
     }
     // IOutputPane's own widgets: the filter box (see updateFilter()) and the zoom buttons.
-    return IOutputPane::toolBarWidgets() << m_saveFilterButton << m_wrapButton << m_copyButton
-                                         << m_saveButton << m_runLabel;
+    return IOutputPane::toolBarWidgets() << m_patternsButton << m_saveFilterButton
+                                         << m_wrapButton << m_copyButton << m_saveButton
+                                         << m_runLabel;
 }
 
 void FilteredOutputPane::applyWordWrap(OutputTabWidget *tab)
@@ -323,16 +347,26 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     m_lineQueue->setDiscardExcessiveOutput(
         Core::ICore::settings()->value("ProjectExplorer/Settings/DiscardAppOutput", false).toBool());
 
-    if (!activeRunControl)
+    if (!activeRunControl) {
+        m_runPatternIds.clear();
+        m_runPatternIdsRun = nullptr;
         return;
+    }
 
     Project *project = activeRunControl->project();
     m_allTab->setLinkParser(project);
 
-    createPatternTabs(project, enabledPatterns(activeRunControl));
+    // A new run starts from what its configuration had enabled at launch. A Re-run is the
+    // same RunControl with the same launch snapshot, so it keeps whatever was toggled from
+    // the pane meanwhile instead of silently reverting to that snapshot.
+    if (activeRunControl != m_runPatternIdsRun) {
+        m_runPatternIds = launchPatternIds(activeRunControl);
+        m_runPatternIdsRun = activeRunControl;
+    }
+    createPatternTabs(project, runPatterns());
 }
 
-QList<Pattern> FilteredOutputPane::enabledPatterns(RunControl *runControl) const
+QStringList FilteredOutputPane::launchPatternIds(RunControl *runControl) const
 {
     // RunControl (v20.0.82) does not retain a live RunConfiguration* of its own -- it only
     // copies data out of one at start time (copyDataFromRunConfiguration), snapshotting each
@@ -341,12 +375,99 @@ QList<Pattern> FilteredOutputPane::enabledPatterns(RunControl *runControl) const
     // configuration happens to be active *now*, not the one this run was actually launched
     // from -- so we must read the RunControl's own snapshot here.
     const auto *filterData = runControl->aspectData<FilterSetAspect>();
-    const QStringList enabledIds = filterData ? filterData->value.toStringList() : QStringList();
+    return filterData ? filterData->value.toStringList() : QStringList();
+}
 
-    // Library order, not enabledIds order: the latter is just the order the boxes were
+QList<Pattern> FilteredOutputPane::runPatterns() const
+{
+    // Library order, not m_runPatternIds order: the latter is just the order the boxes were
     // ticked in, while the library's is the one the user deliberately arranges. Patterns
     // deleted since the selection was saved are skipped silently.
-    return patternLibrary().patternsWithIds(enabledIds);
+    return patternLibrary().patternsWithIds(m_runPatternIds);
+}
+
+RunConfiguration *FilteredOutputPane::launchedRunConfiguration(RunControl *runControl) const
+{
+    // A RunControl keeps no pointer to the RunConfiguration it was started from, only data
+    // copied out of it -- among which the build key and display name, which together pick
+    // it out among its build configuration's run configurations. If they don't do so
+    // unambiguously, don't guess.
+    BuildConfiguration *bc = runControl->buildConfiguration();
+    if (!bc)
+        return nullptr;
+    QList<RunConfiguration *> candidates;
+    for (RunConfiguration *rc : bc->runConfigurations()) {
+        if (rc->buildKey() == runControl->buildKey())
+            candidates << rc;
+    }
+    if (candidates.size() > 1) {
+        candidates.removeIf([runControl](const RunConfiguration *rc) {
+            return rc->expandedDisplayName() != runControl->displayName();
+        });
+    }
+    return candidates.size() == 1 ? candidates.first() : nullptr;
+}
+
+void FilteredOutputPane::setPatternEnabledForRun(const QString &id, bool enabled)
+{
+    RunControl *run = m_runTracker->activeRunControl();
+    if (!run)
+        return;
+    if (enabled && !m_runPatternIds.contains(id))
+        m_runPatternIds.append(id);
+    else if (!enabled)
+        m_runPatternIds.removeAll(id);
+    refreshPatternTabs();
+
+    // Like ticking the box in Run Settings > Output Filters: the next run of the same run
+    // configuration keeps the choice.
+    const std::optional<Pattern> pattern = patternLibrary().patternById(id);
+    const QString name = pattern ? pattern->name : id;
+    if (RunConfiguration *rc = launchedRunConfiguration(run)) {
+        if (auto *aspect = rc->aspect<FilterSetAspect>())
+            aspect->setPatternEnabled(id, enabled);
+    } else {
+        Core::MessageManager::writeSilently(
+            (enabled ? Tr::tr("MultiFilterOutput: enabled \"%1\" for this run only -- the run "
+                              "configuration it was started from couldn't be identified, so its "
+                              "Output Filters are unchanged.")
+                     : Tr::tr("MultiFilterOutput: disabled \"%1\" for this run only -- the run "
+                              "configuration it was started from couldn't be identified, so its "
+                              "Output Filters are unchanged."))
+                .arg(name));
+    }
+}
+
+void FilteredOutputPane::showPatternsMenu(const QPoint &globalPos)
+{
+    QMenu menu;
+    fillPatternsMenu(&menu);
+    menu.exec(globalPos);
+}
+
+void FilteredOutputPane::fillPatternsMenu(QMenu *menu)
+{
+    menu->clear();
+    const bool haveRun = m_runTracker->activeRunControl() != nullptr;
+    menu->addSection(Tr::tr("Filter This Run By"));
+    const QList<Pattern> patterns = patternLibrary().patterns();
+    if (patterns.isEmpty()) {
+        menu->addAction(Tr::tr("No patterns defined"))->setEnabled(false);
+    }
+    for (const Pattern &pattern : patterns) {
+        QAction *action = menu->addAction(
+            pattern.invert ? Tr::tr("Not: %1").arg(pattern.name) : pattern.name);
+        action->setCheckable(true);
+        action->setChecked(m_runPatternIds.contains(pattern.id));
+        action->setEnabled(haveRun);
+        connect(action, &QAction::toggled, this, [this, id = pattern.id](bool checked) {
+            setPatternEnabledForRun(id, checked);
+        });
+    }
+    menu->addSeparator();
+    connect(menu->addAction(Tr::tr("Edit Pattern Library...")), &QAction::triggered, this, [] {
+        Core::ICore::showSettings(Constants::OPTIONS_PAGE_ID);
+    });
 }
 
 void FilteredOutputPane::removePatternTabs()
@@ -500,7 +621,7 @@ bool FilteredOutputPane::routeToPatternTabs(
     return matchedAnyPattern;
 }
 
-void FilteredOutputPane::onPatternsChanged()
+void FilteredOutputPane::refreshPatternTabs()
 {
     RunControl *run = m_runTracker->activeRunControl();
     if (!m_tabWidget || !m_allTab || !run)
@@ -508,7 +629,7 @@ void FilteredOutputPane::onPatternsChanged()
 
     // The library changes for many reasons (a pattern this run doesn't use was edited or
     // added, say); only redo the tabs if this run's own patterns are any different.
-    const QList<Pattern> patterns = enabledPatterns(run);
+    const QList<Pattern> patterns = runPatterns();
     const bool unchanged = patterns.size() == m_patternTabs.size()
                            && std::equal(
                                patterns.cbegin(), patterns.cend(), m_patternTabs.cbegin(),

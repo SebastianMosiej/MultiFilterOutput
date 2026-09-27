@@ -56,11 +56,15 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   settings page. (If *Application Output*'s own "Open Application Output when
   running" preference is set to **Always** rather than the default **On First
   Output Only**, it can still reclaim focus on later output lines.)
+- **Pick patterns from the pane** — right-click the tabs, or use the
+  **Patterns** toolbar button, to switch any pattern on or off for the
+  current run: its tab appears (filled from what **All** holds) or goes
+  away at once, and the choice is saved to the run configuration, just as
+  ticking it under *Run Settings > Output Filters* would.
 - **Pattern edits apply mid-run** — change, reorder or delete a pattern the
   running run uses and its tabs are rebuilt straight away, re-matching
   everything **All** still holds (as **All** shows it: a line cut short
-  there is matched only as far as shown). Enabling an extra pattern for a
-  run still happens in its run configuration.
+  there is matched only as far as shown).
 - **Quick filter** — the same *Filter output...* box as *Application
   Output*, in the pane's toolbar: narrows the current tab to matching lines
   (text or regex, case, show non-matching, N context lines) without touching
