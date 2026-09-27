@@ -10,6 +10,8 @@
 #include <QRegularExpression>
 #include <QSet>
 
+#include <algorithm>
+
 namespace MultiFilterOutput {
 
 QList<Pattern> PatternLibrary::patterns() const
@@ -54,18 +56,28 @@ void PatternLibrary::remove(const QString &id)
     const qsizetype before = m_patterns.size();
     m_patterns.removeIf([&id](const Pattern &p) { return p.id == id; });
     if (m_patterns.size() != before)
-        commitChange();
+        commitChange({id});
 }
 
 void PatternLibrary::setPatterns(const QList<Pattern> &patterns)
 {
+    QStringList removedIds;
+    for (const Pattern &old : std::as_const(m_patterns)) {
+        const bool kept = std::any_of(patterns.cbegin(), patterns.cend(), [&old](const Pattern &p) {
+            return p.id == old.id;
+        });
+        if (!kept)
+            removedIds.append(old.id);
+    }
     m_patterns = patterns;
-    commitChange();
+    commitChange(removedIds);
 }
 
-void PatternLibrary::commitChange()
+void PatternLibrary::commitChange(const QStringList &removedIds)
 {
     save();
+    if (!removedIds.isEmpty())
+        emit patternsRemoved(removedIds);
     emit patternsChanged();
 }
 

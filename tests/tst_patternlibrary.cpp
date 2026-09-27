@@ -27,6 +27,9 @@ private slots:
     void invalidRegexesAreReported();
     void loadedLibraryPersistsEveryMutation();
     void roundTripKeepsEveryField();
+    void removeReportsRemovedId();
+    void setPatternsReportsDroppedIds();
+    void noRemovalReportsNothing();
 };
 
 namespace {
@@ -276,6 +279,46 @@ void tst_PatternLibrary::roundTripKeepsEveryField()
     const QList<Pattern> back = reloaded(settings);
     QCOMPARE(back.size(), 1);
     QCOMPARE(back.first().toMap(), p.toMap());
+}
+
+void tst_PatternLibrary::removeReportsRemovedId()
+{
+    PatternLibrary lib;
+    lib.setPatterns({makePattern("id-a", "A", "a"), makePattern("id-b", "B", "b")});
+    QSignalSpy spy(&lib, &PatternLibrary::patternsRemoved);
+
+    lib.remove("id-a");
+
+    QCOMPARE(spy.size(), 1);
+    QCOMPARE(spy.first().first().toStringList(), QStringList{"id-a"});
+}
+
+// The settings page applies its edits via setPatterns(), so a deletion there arrives as
+// "the new list no longer has these ids".
+void tst_PatternLibrary::setPatternsReportsDroppedIds()
+{
+    PatternLibrary lib;
+    lib.setPatterns(
+        {makePattern("id-a", "A", "a"), makePattern("id-b", "B", "b"), makePattern("id-c", "C", "c")});
+    QSignalSpy spy(&lib, &PatternLibrary::patternsRemoved);
+
+    lib.setPatterns({makePattern("id-b", "B", "b"), makePattern("id-d", "D", "d")});
+
+    QCOMPARE(spy.size(), 1);
+    QCOMPARE(spy.first().first().toStringList(), (QStringList{"id-a", "id-c"}));
+}
+
+void tst_PatternLibrary::noRemovalReportsNothing()
+{
+    PatternLibrary lib;
+    lib.setPatterns({makePattern("id-a", "A", "a")});
+    QSignalSpy spy(&lib, &PatternLibrary::patternsRemoved);
+
+    lib.addOrUpdate(makePattern("id-b", "B", "b"));
+    lib.setPatterns({makePattern("id-b", "B", "b"), makePattern("id-a", "A2", "a")});
+    lib.remove("no-such-id");
+
+    QCOMPARE(spy.size(), 0);
 }
 
 QTEST_GUILESS_MAIN(tst_PatternLibrary)

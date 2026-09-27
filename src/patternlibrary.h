@@ -44,10 +44,16 @@ public:
 
 signals:
     void patternsChanged();
+    // Emitted by remove() and setPatterns() with the ids of patterns that are gone, just
+    // before the patternsChanged() for the same change -- so run configurations can forget
+    // those ids (see FilterSetAspect). Deliberately not derived from "ids the library doesn't
+    // know": that would also wipe every selection if the library ever came up empty.
+    void patternsRemoved(const QStringList &ids);
 
 private:
-    // Every mutator ends here: persist (see load()), then notify.
-    void commitChange();
+    // Every mutator ends here: persist (see load()), then notify -- patternsRemoved() first,
+    // if the change dropped any patterns.
+    void commitChange(const QStringList &removedIds = {});
 
     QList<Pattern> m_patterns;
     Utils::QtcSettings *m_settings = nullptr;
