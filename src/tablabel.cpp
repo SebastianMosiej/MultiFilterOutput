@@ -10,7 +10,9 @@ QString tabLabel(const Pattern &pattern, int matchCount, bool tooSlow)
 {
     const QString name = pattern.invert ? QStringLiteral("Not: %1").arg(pattern.name)
                                         : pattern.name;
-    const QString label = QStringLiteral("%1 (%2)").arg(name).arg(matchCount);
+    // One multi-arg arg(), never chained: a chained .arg() would also substitute into a "%1"
+    // inside the name the first one inserted.
+    const QString label = QStringLiteral("%1 (%2)").arg(name, QString::number(matchCount));
     return tooSlow ? QStringLiteral("%1 - disabled: too slow").arg(label) : label;
 }
 
@@ -18,7 +20,7 @@ QString runLabel(const QString &runName, qint64 pid)
 {
     if (pid <= 0)
         return Tr::tr("Filtering: %1").arg(runName);
-    return Tr::tr("Filtering: %1 (pid %2)").arg(runName).arg(pid);
+    return Tr::tr("Filtering: %1 (pid %2)").arg(runName, QString::number(pid));
 }
 
 void applyTabLabel(

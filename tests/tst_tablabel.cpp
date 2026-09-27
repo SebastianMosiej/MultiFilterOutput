@@ -19,6 +19,7 @@ private slots:
     void applyTabLabelSetsTextAndColor();
     void applyTabLabelClearsColorWhenPatternHasNone();
     void applyTabLabelMarksTooSlow();
+    void placeholdersInNamesAreShownLiterally();
 };
 
 void tst_TabLabel::normalPatternShowsNameAndCount()
@@ -105,6 +106,16 @@ void tst_TabLabel::applyTabLabelMarksTooSlow()
     applyTabLabel(&bar, 0, p, 12, /*tooSlow=*/true);
 
     QCOMPARE(bar.tabText(0), QStringLiteral("Errors (12) - disabled: too slow"));
+}
+
+// Chained QString::arg() substitutes into text an earlier arg() inserted, so a "%1" in a
+// pattern or run name would be replaced by the count or pid.
+void tst_TabLabel::placeholdersInNamesAreShownLiterally()
+{
+    Pattern p;
+    p.name = "Foo %1 %2";
+    QCOMPARE(tabLabel(p, 5), QStringLiteral("Foo %1 %2 (5)"));
+    QCOMPARE(runLabel("App %1", 42), QStringLiteral("Filtering: App %1 (pid 42)"));
 }
 
 QTEST_MAIN(tst_TabLabel)

@@ -30,8 +30,7 @@ QString displayText(const QString &line, int maxLength)
     if (cut > 1 && line.at(cut - 1).isHighSurrogate())
         --cut;
     return Tr::tr("%1 ... [%2 more characters not shown]")
-        .arg(line.left(cut))
-        .arg(line.size() - cut);
+        .arg(line.left(cut), QString::number(line.size() - cut)); // not chained: see tabLabel()
 }
 
 } // namespace

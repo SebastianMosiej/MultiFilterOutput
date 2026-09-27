@@ -20,6 +20,7 @@ private slots:
     void zeroMaxLineLengthMeansNoLimit();
     void truncationNeverSplitsSurrogatePair();
     void truncatedLineStillJumps();
+    void truncationShowsPlaceholdersLiterally();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -179,6 +180,16 @@ void tst_OutputTabWidget::truncatedLineStillJumps()
 
     pattern.appendLine(QString(50, 'x'), Utils::StdOutFormat, 42);
     QCOMPARE(clickBlock(pattern, 0), 42);
+}
+
+// printf-style or URL-encoded output routinely contains "%1"; it must not be mistaken for a
+// placeholder of the truncation note.
+void tst_OutputTabWidget::truncationShowsPlaceholdersLiterally()
+{
+    OutputTabWidget tab;
+    tab.setMaxLineLength(10);
+    tab.appendLine("a%1b%2cdefghijklmn", Utils::StdOutFormat);
+    QCOMPARE(lastLineText(tab), QStringLiteral("a%1b%2cdef ... [8 more characters not shown]"));
 }
 
 QTEST_MAIN(tst_OutputTabWidget)
