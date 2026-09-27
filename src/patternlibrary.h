@@ -5,6 +5,7 @@
 
 #include <QList>
 #include <QObject>
+#include <QStringList>
 
 #include <optional>
 
@@ -40,5 +41,14 @@ private:
 };
 
 MULTIFILTEROUTPUT_EXPORT PatternLibrary &patternLibrary();
+
+// Checks patterns loaded from settings -- which may have been hand-edited or written by an
+// older version -- for problems the Pattern Library editor would never let through, and
+// returns a human-readable description of each. Only ids are repaired: a missing id gets a
+// fresh one, and of several patterns sharing an id the first keeps it (so run configurations
+// that selected it still find it) while the others get fresh ones. Everything else -- empty
+// pattern text, an invalid regular expression -- is reported but left as is: matching already
+// fails safe on it, and the user can fix it in the editor.
+MULTIFILTEROUTPUT_EXPORT QStringList validatePatterns(QList<Pattern> &patterns);
 
 } // namespace MultiFilterOutput

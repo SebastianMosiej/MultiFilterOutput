@@ -1,10 +1,15 @@
 #include "patternlibrary.h"
 
 #include "multifilteroutputconstants.h"
+#include "multifilteroutputtr.h"
 
 #include <coreplugin/icore.h>
+#include <coreplugin/messagemanager.h>
 
 #include <utils/qtcsettings.h>
+
+#include <QRegularExpression>
+#include <QSet>
 
 namespace MultiFilterOutput {
 
@@ -91,6 +96,11 @@ void PatternLibrary::load()
 
     settings->endGroup();
 
+    // General Messages rather than a debug log: these need the user to look at the Pattern
+    // Library, and the log is not somewhere they would ever see them.
+    for (const QString &problem : validatePatterns(m_patterns))
+        Core::MessageManager::writeSilently(Tr::tr("MultiFilterOutput: %1").arg(problem));
+
     emit patternsChanged();
 }
 
@@ -118,6 +128,47 @@ void PatternLibrary::save() const
 
     settings->endGroup();
     settings->sync();
+}
+
+QStringList validatePatterns(QList<Pattern> &patterns)
+{
+    QStringList problems;
+    QSet<QString> seenIds;
+    for (Pattern &p : patterns) {
+        const QString name = p.name.isEmpty() ? Tr::tr("(unnamed)") : p.name;
+
+        if (p.id.isEmpty()) {
+            p.id = Pattern::createNew().id;
+            problems << Tr::tr("Pattern \"%1\" had no id; it was given a new one.").arg(name);
+        } else if (seenIds.contains(p.id)) {
+            const QString sharedId = p.id;
+            p.id = Pattern::createNew().id;
+            problems << Tr::tr("Pattern \"%1\" had the same id (%2) as an earlier pattern; it was "
+                               "given a new one, so run configurations that selected that id "
+                               "keep using the earlier pattern.")
+                            .arg(name, sharedId);
+        }
+        seenIds.insert(p.id);
+
+        if (p.patternText.isEmpty()) {
+            problems << Tr::tr("Pattern \"%1\" has no pattern text, so it matches every line.")
+                            .arg(name);
+        } else if (p.isRegex && !QRegularExpression(p.patternText).isValid()) {
+            problems << Tr::tr("Pattern \"%1\" is not a valid regular expression, so it never "
+                               "matches.")
+                            .arg(name);
+        }
+
+        if (p.groupContinuationLines
+            && (p.continuationPattern.isEmpty()
+                || !QRegularExpression(p.continuationPattern).isValid())) {
+            problems << Tr::tr("Pattern \"%1\" groups continuation lines, but its continuation "
+                               "pattern is not a valid regular expression, so no lines are "
+                               "grouped.")
+                            .arg(name);
+        }
+    }
+    return problems;
 }
 
 PatternLibrary &patternLibrary()
