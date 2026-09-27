@@ -34,6 +34,9 @@ private slots:
     void unversionedSettingsMigrateLegacyGray();
     void versionedSettingsKeepGray();
     void newerSchemaVersionIsReported();
+    void loadPersistsLegacyMigration();
+    void loadPersistsRepairedIds();
+    void loadNeverRewritesNewerSettings();
 };
 
 namespace {
@@ -405,6 +408,51 @@ void tst_PatternLibrary::newerSchemaVersionIsReported()
     QCOMPARE(problems.size(), 1);
     QVERIFY(problems.first().contains("99"));
     QCOMPARE(lib.patterns().size(), 1);
+}
+
+// Migrated legacy data is written back right away, so the migration runs exactly once --
+// not again after a crash, and without relying on a save at shutdown.
+void tst_PatternLibrary::loadPersistsLegacyMigration()
+{
+    QTemporaryDir dir;
+    Utils::QtcSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
+    writeRawPattern(settings, -1, "id-1", QColor(Qt::gray));
+
+    PatternLibrary lib;
+    lib.load(&settings);
+
+    QCOMPARE(rawSchemaVersion(settings).toInt(), 1);
+    QVERIFY(!reloaded(settings).first().color.isValid());
+}
+
+// A repaired id that only lived in memory until shutdown would come back different after a
+// crash -- orphaning any run configuration that selected the pattern in the meantime.
+void tst_PatternLibrary::loadPersistsRepairedIds()
+{
+    QTemporaryDir dir;
+    Utils::QtcSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
+    writeRawPattern(settings, 1, "", QColor());
+
+    PatternLibrary lib;
+    lib.load(&settings);
+    const QString repairedId = lib.patterns().first().id;
+
+    QVERIFY(!repairedId.isEmpty());
+    QCOMPARE(reloaded(settings).first().id, repairedId);
+}
+
+// Loading alone must never downgrade what a newer plugin version wrote; only an actual edit
+// (which the load warning announces) may.
+void tst_PatternLibrary::loadNeverRewritesNewerSettings()
+{
+    QTemporaryDir dir;
+    Utils::QtcSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
+    writeRawPattern(settings, 99, "", QColor(Qt::gray));
+
+    PatternLibrary lib;
+    lib.load(&settings);
+
+    QCOMPARE(rawSchemaVersion(settings).toInt(), 99);
 }
 
 QTEST_GUILESS_MAIN(tst_PatternLibrary)

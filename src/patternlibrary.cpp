@@ -122,7 +122,7 @@ QStringList PatternLibrary::load(Utils::QtcSettings *settings)
                         .arg(Constants::SETTINGS_SCHEMA_VERSION);
     }
     // Migrations, oldest first. Each one runs only for data older than the format it fixes;
-    // the next save() writes the current version, so it never runs twice.
+    // the save() below then stamps the current version, so it never runs twice.
     if (schemaVersion < 1) {
         // Before version 1 a never-colored pattern was stored as QColor(Qt::gray), not as
         // "no color" -- indistinguishable from a deliberate gray, but only possible then.
@@ -131,7 +131,24 @@ QStringList PatternLibrary::load(Utils::QtcSettings *settings)
                 p.color = QColor();
         }
     }
+    const auto ids = [this] {
+        QStringList result;
+        for (const Pattern &p : std::as_const(m_patterns))
+            result << p.id;
+        return result;
+    };
+    const QStringList idsAsStored = ids();
     problems += validatePatterns(m_patterns);
+    const bool idsRepaired = ids() != idsAsStored;
+
+    // Write migrated or repaired data back straight away rather than at shutdown: a repaired
+    // id that only lived in memory would come back different after a crash, orphaning any
+    // run configuration that selected the pattern meanwhile. Never over a newer format,
+    // though -- loading alone must not downgrade it (see the warning above).
+    if (schemaVersion <= Constants::SETTINGS_SCHEMA_VERSION
+        && (schemaVersion < Constants::SETTINGS_SCHEMA_VERSION || idsRepaired)) {
+        save();
+    }
 
     emit patternsChanged();
     return problems;

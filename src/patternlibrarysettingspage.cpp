@@ -264,8 +264,8 @@ public:
     }
 
     // Add/Edit/Remove only ever touch the working copy, so dismissing the Options dialog
-    // with Cancel (which simply never calls apply()) leaves the live library -- and, since
-    // the plugin saves it again on shutdown, the on-disk settings -- untouched.
+    // with Cancel (which simply never calls apply()) leaves the live library -- and so the
+    // on-disk settings, which only change when the library does -- untouched.
     void apply() final
     {
         // setPatterns() persists by itself -- see PatternLibrary::load().

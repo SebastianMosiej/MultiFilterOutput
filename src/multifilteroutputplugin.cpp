@@ -46,9 +46,9 @@ void MultiFilterOutputPlugin::initialize()
 
 ExtensionSystem::IPlugin::ShutdownFlag MultiFilterOutputPlugin::aboutToShutdown()
 {
-    // Every change made through PatternLibrary's mutators is already on disk; this is for the
-    // repairs load() itself may have made (see validatePatterns()), which aren't a mutation.
-    patternLibrary().save();
+    // Nothing to save: PatternLibrary writes every change -- and load()'s own repairs and
+    // migrations -- as it happens. An unconditional save here used to stamp the current
+    // settings format over one written by a newer plugin version on every shutdown.
     return SynchronousShutdown;
 }
 
