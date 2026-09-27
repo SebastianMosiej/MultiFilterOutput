@@ -242,8 +242,8 @@ public:
     // the plugin saves it again on shutdown, the on-disk settings -- untouched.
     void apply() final
     {
+        // setPatterns() persists by itself -- see PatternLibrary::load().
         patternLibrary().setPatterns(m_workingPatterns);
-        patternLibrary().save();
     }
 
 private:

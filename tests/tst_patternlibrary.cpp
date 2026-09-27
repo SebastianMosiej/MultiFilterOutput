@@ -1,6 +1,9 @@
 #include "../src/patternlibrary.h"
 
+#include <utils/qtcsettings.h>
+
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest>
 
 using namespace MultiFilterOutput;
@@ -22,6 +25,8 @@ private slots:
     void duplicateIdKeepsFirstAndRenamesOthers();
     void emptyPatternTextIsReportedButKept();
     void invalidRegexesAreReported();
+    void loadedLibraryPersistsEveryMutation();
+    void roundTripKeepsEveryField();
 };
 
 namespace {
@@ -210,6 +215,67 @@ void tst_PatternLibrary::invalidRegexesAreReported()
     QCOMPARE(problems.size(), 2);
     QVERIFY(problems.at(0).contains("BadMain"));
     QVERIFY(problems.at(1).contains("BadCont"));
+}
+
+// Reads back what `settings` holds, the way the next Qt Creator session would.
+static QList<Pattern> reloaded(Utils::QtcSettings &settings)
+{
+    PatternLibrary fresh;
+    fresh.load(&settings);
+    return fresh.patterns();
+}
+
+// Nothing but the settings page's apply() used to call save(); any other caller of a
+// mutator would silently lose its change on a crash. Once loaded, the library persists
+// every change itself.
+void tst_PatternLibrary::loadedLibraryPersistsEveryMutation()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    Utils::QtcSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
+    PatternLibrary lib;
+    lib.load(&settings);
+
+    const Pattern a = makePattern("id-a", "A", "a");
+    const Pattern b = makePattern("id-b", "B", "b");
+    lib.addOrUpdate(a);
+    QCOMPARE(reloaded(settings).size(), 1);
+
+    lib.setPatterns({a, b});
+    QCOMPARE(reloaded(settings).size(), 2);
+
+    Pattern renamed = b;
+    renamed.name = "B renamed";
+    lib.addOrUpdate(renamed);
+    QCOMPARE(reloaded(settings).at(1).name, QStringLiteral("B renamed"));
+
+    lib.remove("id-a");
+    const QList<Pattern> afterRemove = reloaded(settings);
+    QCOMPARE(afterRemove.size(), 1);
+    QCOMPARE(afterRemove.first().id, QStringLiteral("id-b"));
+}
+
+void tst_PatternLibrary::roundTripKeepsEveryField()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    Utils::QtcSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
+    PatternLibrary lib;
+    lib.load(&settings);
+
+    Pattern p = makePattern("id-1", "Errors", "ERR(OR)?");
+    p.isRegex = true;
+    p.caseSensitive = true;
+    p.invert = true;
+    p.color = QColor(Qt::red);
+    p.groupContinuationLines = true;
+    p.continuationPattern = "^\\s+";
+    p.isDefault = true;
+    lib.addOrUpdate(p);
+
+    const QList<Pattern> back = reloaded(settings);
+    QCOMPARE(back.size(), 1);
+    QCOMPARE(back.first().toMap(), p.toMap());
 }
 
 QTEST_GUILESS_MAIN(tst_PatternLibrary)

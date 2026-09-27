@@ -9,6 +9,10 @@
 
 #include <optional>
 
+namespace Utils {
+class QtcSettings;
+}
+
 namespace MultiFilterOutput {
 
 class MULTIFILTEROUTPUT_EXPORT PatternLibrary : public QObject
@@ -30,14 +34,23 @@ public:
     // so that Cancel really cancels.
     void setPatterns(const QList<Pattern> &patterns);
 
-    void load();
+    // Reads the library from `settings` and remembers them as where it lives: from then on
+    // every change (addOrUpdate(), remove(), setPatterns()) is written straight back, so no
+    // caller can forget to persist one. A library that has never been loaded -- e.g. a
+    // local one in a unit test -- keeps its changes in memory only.
+    void load(Utils::QtcSettings *settings);
+    // Writes the library to the settings it was loaded from; does nothing if it never was.
     void save() const;
 
 signals:
     void patternsChanged();
 
 private:
+    // Every mutator ends here: persist (see load()), then notify.
+    void commitChange();
+
     QList<Pattern> m_patterns;
+    Utils::QtcSettings *m_settings = nullptr;
 };
 
 MULTIFILTEROUTPUT_EXPORT PatternLibrary &patternLibrary();

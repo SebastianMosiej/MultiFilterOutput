@@ -10,6 +10,7 @@
 #include "runtracker.h"
 
 #include <coreplugin/dialogs/ioptionspage.h>
+#include <coreplugin/icore.h>
 
 #include <projectexplorer/runconfiguration.h>
 
@@ -30,7 +31,7 @@ void MultiFilterOutputPlugin::initialize()
         ":/multifilteroutput/images/MultiFilterOutput_24.png");
 
     m_settingsPage = new PatternLibrarySettingsPage;
-    patternLibrary().load();
+    patternLibrary().load(Core::ICore::settings());
     outputPaneSettings().load();
 
     ProjectExplorer::RunConfiguration::registerAspect<FilterSetAspect>();
@@ -41,6 +42,8 @@ void MultiFilterOutputPlugin::initialize()
 
 ExtensionSystem::IPlugin::ShutdownFlag MultiFilterOutputPlugin::aboutToShutdown()
 {
+    // Every change made through PatternLibrary's mutators is already on disk; this is for the
+    // repairs load() itself may have made (see validatePatterns()), which aren't a mutation.
     patternLibrary().save();
     return SynchronousShutdown;
 }

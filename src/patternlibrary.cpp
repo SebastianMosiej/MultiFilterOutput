@@ -3,7 +3,6 @@
 #include "multifilteroutputconstants.h"
 #include "multifilteroutputtr.h"
 
-#include <coreplugin/icore.h>
 #include <coreplugin/messagemanager.h>
 
 #include <utils/qtcsettings.h>
@@ -42,12 +41,12 @@ void PatternLibrary::addOrUpdate(const Pattern &pattern)
     for (Pattern &existing : m_patterns) {
         if (existing.id == pattern.id) {
             existing = pattern;
-            emit patternsChanged();
+            commitChange();
             return;
         }
     }
     m_patterns.append(pattern);
-    emit patternsChanged();
+    commitChange();
 }
 
 void PatternLibrary::remove(const QString &id)
@@ -55,20 +54,26 @@ void PatternLibrary::remove(const QString &id)
     const qsizetype before = m_patterns.size();
     m_patterns.removeIf([&id](const Pattern &p) { return p.id == id; });
     if (m_patterns.size() != before)
-        emit patternsChanged();
+        commitChange();
 }
 
 void PatternLibrary::setPatterns(const QList<Pattern> &patterns)
 {
     m_patterns = patterns;
+    commitChange();
+}
+
+void PatternLibrary::commitChange()
+{
+    save();
     emit patternsChanged();
 }
 
-void PatternLibrary::load()
+void PatternLibrary::load(Utils::QtcSettings *settings)
 {
     m_patterns.clear();
+    m_settings = settings;
 
-    Utils::QtcSettings *settings = Core::ICore::settings();
     settings->beginGroup(Constants::SETTINGS_GROUP);
 
     const int count = settings->beginReadArray("patterns");
@@ -106,7 +111,9 @@ void PatternLibrary::load()
 
 void PatternLibrary::save() const
 {
-    Utils::QtcSettings *settings = Core::ICore::settings();
+    Utils::QtcSettings *settings = m_settings;
+    if (!settings)
+        return;
     settings->beginGroup(Constants::SETTINGS_GROUP);
 
     settings->beginWriteArray("patterns", int(m_patterns.size()));
