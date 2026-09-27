@@ -93,6 +93,10 @@ if(WITH_TESTS)
     SOURCES tests/tst_linebuffer.cpp
     DEPENDS MultiFilterOutput
   )
+  add_qtc_test(tst_linebufferfuzz
+    SOURCES tests/tst_linebufferfuzz.cpp
+    DEPENDS MultiFilterOutput
+  )
   add_qtc_test(tst_patternlibrary
     SOURCES tests/tst_patternlibrary.cpp
     DEPENDS MultiFilterOutput
@@ -144,6 +148,7 @@ if(WITH_TESTS)
       tst_pattern
       tst_linematcher
       tst_linebuffer
+      tst_linebufferfuzz
       tst_patternlibrary
       tst_filtersetaspect
       tst_filereference
