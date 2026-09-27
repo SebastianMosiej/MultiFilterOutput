@@ -13,6 +13,8 @@ private slots:
     void splitAcrossChunks();
     void multipleLinesInOneChunk();
     void carriageReturnNewlineHandled();
+    void flushReturnsPendingPartialLineOnce();
+    void flushDropsTrailingCarriageReturn();
 };
 
 void tst_LineBuffer::singleCompleteLine()
@@ -38,6 +40,26 @@ void tst_LineBuffer::carriageReturnNewlineHandled()
 {
     LineBuffer buf;
     QCOMPARE(buf.feed("one\r\ntwo\r\n"), (QStringList{"one", "two"}));
+}
+
+// A run can end on a line with no trailing newline (a crash message, a final printf); flush()
+// is how RunTracker gets it out instead of dropping it.
+void tst_LineBuffer::flushReturnsPendingPartialLineOnce()
+{
+    LineBuffer buf;
+    QCOMPARE(buf.feed("one\nlast"), QStringList{"one"});
+    QCOMPARE(buf.flush(), QStringLiteral("last"));
+    QVERIFY(buf.flush().isEmpty());
+    QCOMPARE(buf.feed("next\n"), QStringList{"next"});
+}
+
+// The "\r" of a "\r\n" pair can be the last thing a chunk holds; if the run then ends, that
+// half of the line ending must not leak into the flushed line.
+void tst_LineBuffer::flushDropsTrailingCarriageReturn()
+{
+    LineBuffer buf;
+    QVERIFY(buf.feed("last\r").isEmpty());
+    QCOMPARE(buf.flush(), QStringLiteral("last"));
 }
 
 QTEST_GUILESS_MAIN(tst_LineBuffer)
