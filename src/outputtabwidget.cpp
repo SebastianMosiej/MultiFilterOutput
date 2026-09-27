@@ -1,7 +1,9 @@
 #include "outputtabwidget.h"
 
+#include "linematcher.h"
 #include "multifilterlineparser.h"
 #include "multifilteroutputtr.h"
+#include "pattern.h"
 
 #include <coreplugin/editormanager/editormanager.h>
 #include <coreplugin/find/basetextfind.h>
@@ -153,7 +155,10 @@ int OutputTabWidget::appendLine(
     // the block that actually holds the line just appended is the one before the last.
     // Nothing else sets userState on this document (there is no syntax highlighter), so it is
     // free to carry the line id -- see the class comment.
-    document()->lastBlock().previous().setUserState(lineId);
+    QTextBlock block = document()->lastBlock().previous();
+    block.setUserState(lineId);
+    if (!m_filter.text.isEmpty())
+        filterAppendedLine(block);
 
     if (countsAsMatch) {
         ++m_matchCount;
@@ -179,6 +184,7 @@ void OutputTabWidget::reset()
     m_formatter.clear();
     m_nextLineId = 0;
     m_matchStops = 0;
+    m_afterContextRemaining = 0;
     m_matchCount = 0;
     m_followTail = true;
     // Immediately, not coalesced: the label must not keep showing the old count until the
@@ -286,6 +292,92 @@ int OutputTabWidget::goToMatch(Direction direction)
         block = forward ? block.next() : block.previous();
     }
     return -1;
+}
+
+namespace {
+
+// Whether `filter` lets a line with this (displayed) text through -- matched the way pattern
+// tabs match, so the quick filter and the Pattern Library agree on what e.g. an inverted,
+// case-insensitive regex means.
+bool filterMatches(const LineFilter &filter, const QString &text)
+{
+    if (filter.text.isEmpty())
+        return true;
+    Pattern pattern;
+    pattern.patternText = filter.text;
+    pattern.isRegex = filter.isRegex;
+    pattern.caseSensitive = filter.caseSensitivity == Qt::CaseSensitive;
+    pattern.invert = filter.inverted;
+    return lineMatches(pattern, text);
+}
+
+} // namespace
+
+void OutputTabWidget::setFilter(const LineFilter &filter)
+{
+    if (filter == m_filter)
+        return;
+    m_filter = filter;
+
+    // Every line but the trailing empty block, which always stays visible.
+    QList<QTextBlock> blocks;
+    for (QTextBlock b = document()->firstBlock(); b != document()->lastBlock(); b = b.next())
+        blocks << b;
+    const bool showAll = filter.text.isEmpty();
+    QList<bool> visible(blocks.size(), showAll);
+    qsizetype lastMatch = -1;
+    if (!showAll) {
+        for (qsizetype i = 0; i < blocks.size(); ++i) {
+            if (!filterMatches(filter, blocks.at(i).text()))
+                continue;
+            lastMatch = i;
+            const qsizetype from = qMax<qsizetype>(0, i - filter.beforeContext);
+            const qsizetype to = qMin(blocks.size() - 1, i + filter.afterContext);
+            for (qsizetype k = from; k <= to; ++k)
+                visible[k] = true;
+        }
+    }
+    // Lines appended from now on may still be after-context of the last match.
+    m_afterContextRemaining = lastMatch < 0
+        ? 0
+        : qMax<qsizetype>(0, filter.afterContext - (blocks.size() - 1 - lastMatch));
+
+    for (qsizetype i = 0; i < blocks.size(); ++i)
+        blocks[i].setVisible(visible.at(i));
+
+    // Re-lays the document out for the changed visibility -- what Core::OutputWindow does
+    // after filtering, too.
+    setDocument(document());
+    if (m_followTail)
+        verticalScrollBar()->setValue(verticalScrollBar()->maximum());
+}
+
+void OutputTabWidget::filterAppendedLine(QTextBlock block)
+{
+    const auto setVisible = [this](QTextBlock b, bool visible) {
+        if (b.isVisible() == visible)
+            return;
+        b.setVisible(visible);
+        document()->markContentsDirty(b.position(), b.length());
+    };
+
+    if (filterMatches(m_filter, block.text())) {
+        setVisible(block, true);
+        QTextBlock before = block.previous();
+        for (int i = 0; i < m_filter.beforeContext && before.isValid(); ++i, before = before.previous())
+            setVisible(before, true);
+        m_afterContextRemaining = m_filter.afterContext;
+    } else if (m_afterContextRemaining > 0) {
+        setVisible(block, true);
+        --m_afterContextRemaining;
+    } else {
+        setVisible(block, false);
+    }
+}
+
+LineFilter OutputTabWidget::filter() const
+{
+    return m_filter;
 }
 
 Utils::Result<> OutputTabWidget::saveContents(const Utils::FilePath &path) const

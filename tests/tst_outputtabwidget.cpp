@@ -37,6 +37,10 @@ private slots:
     void resetClearsMatchStops();
     void saveContentsWritesTabTextAsUtf8();
     void saveContentsReportsFailure();
+    void filterShowsOnlyMatchingLines();
+    void invertedRegexCaseSensitiveFilter();
+    void filterShowsContextLines();
+    void filterAppliesToLinesAppendedLater();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -372,6 +376,80 @@ void tst_OutputTabWidget::saveContentsReportsFailure()
     const Utils::FilePath path = Utils::FilePath::fromString(dir.filePath("missing/tab.txt"));
 
     QVERIFY(!tab.saveContents(path).has_value());
+}
+
+// The lines a filtered tab currently shows (not counting the trailing empty block).
+static QStringList visibleLines(const OutputTabWidget &tab)
+{
+    QStringList lines;
+    for (QTextBlock b = tab.document()->firstBlock(); b != tab.document()->lastBlock(); b = b.next()) {
+        if (b.isVisible())
+            lines << b.text();
+    }
+    return lines;
+}
+
+static void appendAll(OutputTabWidget &tab, const QStringList &lines)
+{
+    for (const QString &line : lines)
+        tab.appendLine(line, Utils::StdOutFormat);
+}
+
+void tst_OutputTabWidget::filterShowsOnlyMatchingLines()
+{
+    OutputTabWidget tab;
+    appendAll(tab, {"alpha", "ERROR one", "beta", "error two"});
+
+    tab.setFilter({"error"});
+    QCOMPARE(visibleLines(tab), (QStringList{"ERROR one", "error two"}));
+
+    tab.setFilter({});
+    QCOMPARE(visibleLines(tab), (QStringList{"alpha", "ERROR one", "beta", "error two"}));
+}
+
+void tst_OutputTabWidget::invertedRegexCaseSensitiveFilter()
+{
+    OutputTabWidget tab;
+    appendAll(tab, {"ERROR one", "error two", "info"});
+
+    LineFilter filter;
+    filter.text = "^ERR";
+    filter.isRegex = true;
+    filter.caseSensitivity = Qt::CaseSensitive;
+    filter.inverted = true;
+    tab.setFilter(filter);
+
+    QCOMPARE(visibleLines(tab), (QStringList{"error two", "info"}));
+}
+
+void tst_OutputTabWidget::filterShowsContextLines()
+{
+    OutputTabWidget tab;
+    appendAll(tab, {"a", "b", "MATCH", "c", "d", "e"});
+
+    LineFilter filter;
+    filter.text = "MATCH";
+    filter.beforeContext = 1;
+    filter.afterContext = 2;
+    tab.setFilter(filter);
+
+    QCOMPARE(visibleLines(tab), (QStringList{"b", "MATCH", "c", "d"}));
+}
+
+// Output keeps arriving while a filter is set: new lines are filtered as they come, context
+// included.
+void tst_OutputTabWidget::filterAppliesToLinesAppendedLater()
+{
+    OutputTabWidget tab;
+    LineFilter filter;
+    filter.text = "MATCH";
+    filter.beforeContext = 1;
+    filter.afterContext = 1;
+    tab.setFilter(filter);
+
+    appendAll(tab, {"x", "y", "MATCH 1", "after", "z", "MATCH 2"});
+
+    QCOMPARE(visibleLines(tab), (QStringList{"y", "MATCH 1", "after", "z", "MATCH 2"}));
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

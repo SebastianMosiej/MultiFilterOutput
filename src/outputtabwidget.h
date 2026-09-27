@@ -7,6 +7,7 @@
 #include <utils/result.h>
 
 #include <QPlainTextEdit>
+#include <QTextBlock>
 #include <QPoint>
 #include <QTimer>
 
@@ -33,6 +34,21 @@ MULTIFILTEROUTPUT_EXPORT int nextLineId(int id, int modulus = LineIdModulus);
 // ids that wrap at `modulus` -- i.e. (newest - target) mod modulus. A target "newer" than
 // `newest` therefore comes out as a huge age, which reads as long gone.
 MULTIFILTEROUTPUT_EXPORT qint64 lineIdAge(int newest, int target, int modulus = LineIdModulus);
+
+// The pane's quick filter (the "Filter output..." box), as applied to one tab. Empty text
+// shows everything.
+struct MULTIFILTEROUTPUT_EXPORT LineFilter
+{
+    QString text;
+    bool isRegex = false;
+    Qt::CaseSensitivity caseSensitivity = Qt::CaseInsensitive;
+    bool inverted = false;
+    // Lines shown before/after each matching line, as context.
+    int beforeContext = 0;
+    int afterContext = 0;
+
+    bool operator==(const LineFilter &) const = default;
+};
 
 // A single output tab: owns a Utils::OutputFormatter that appends formatted, optionally
 // linkified lines to itself. Used by FilteredOutputPane both for the "All" tab and for each
@@ -109,6 +125,12 @@ public:
     // toolbar.
     Utils::Result<> saveContents(const Utils::FilePath &path) const;
 
+    // Hides the lines the filter doesn't match (plus any context lines around those it does),
+    // and keeps doing so for lines appended from now on. Setting the filter it already has is
+    // a no-op.
+    void setFilter(const LineFilter &filter);
+    LineFilter filter() const;
+
 signals:
     // Coalesced: emitted once per event-loop pass however many matches were appended in it
     // (except from reset(), which emits 0 straight away).
@@ -122,6 +144,9 @@ signals:
     void fontZoomChanged(qreal zoom);
 
 protected:
+    // Applies the current filter to a line just appended.
+    void filterAppendedLine(QTextBlock block);
+
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
@@ -135,6 +160,9 @@ private:
     // then just finds nothing.
     int m_matchStops = 0;
     int m_maxLineLength = 0;
+    LineFilter m_filter;
+    // After-context lines still to reveal after the last matching line appended.
+    int m_afterContextRemaining = 0;
     QPoint m_pressPos;
     int m_matchCount = 0;
     QTimer m_matchCountTimer;
