@@ -29,6 +29,8 @@ private slots:
     void breakerTripsAfterRepeatedSlowMatches();
     void breakerForgivesOneOffStall();
     void breakerResetRearms();
+    void regexCacheStaysWithinCapacity();
+    void regexCacheKeepsCaseVariantsApart();
 };
 
 void tst_LineMatcher::plainTextMatchCaseInsensitiveByDefault()
@@ -242,6 +244,28 @@ void tst_LineMatcher::breakerResetRearms()
     breaker.reset();
     QVERIFY(!breaker.isTripped());
     QCOMPARE(breaker.run([] { return true; }), true);
+}
+
+// Every edit of a pattern's text in the settings page is a new cache key once matched; the
+// cache must not keep all of them for the rest of the session -- and must keep compiling
+// correctly after it has had to make room.
+void tst_LineMatcher::regexCacheStaysWithinCapacity()
+{
+    RegexCache cache(4);
+    for (int i = 0; i < 10; ++i) {
+        const QString text = QStringLiteral("pattern%1").arg(i);
+        QVERIFY(cache.get(text, true).match(text).hasMatch());
+        QVERIFY(cache.size() <= 4);
+    }
+    QVERIFY(cache.get("pattern0", true).match("pattern0").hasMatch());
+}
+
+void tst_LineMatcher::regexCacheKeepsCaseVariantsApart()
+{
+    RegexCache cache;
+    QVERIFY(cache.get("abc", /*caseSensitive=*/false).match("ABC").hasMatch());
+    QVERIFY(!cache.get("abc", /*caseSensitive=*/true).match("ABC").hasMatch());
+    QCOMPARE(cache.size(), 2);
 }
 
 QTEST_GUILESS_MAIN(tst_LineMatcher)

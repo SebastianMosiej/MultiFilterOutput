@@ -2,6 +2,8 @@
 
 #include "multifilteroutput_global.h"
 
+#include <QHash>
+#include <QRegularExpression>
 #include <QString>
 
 #include <chrono>
@@ -10,6 +12,25 @@
 namespace MultiFilterOutput {
 
 class Pattern;
+
+// Compiled regular expressions, keyed by the two things that affect compilation: the pattern
+// text and case sensitivity. Bounded: when a new entry would exceed the capacity, the cache
+// starts over empty. The working set (at most two regexes per enabled pattern) is far below
+// the default capacity, so this only ever discards entries left behind by edited or deleted
+// patterns -- which an unbounded cache would keep for the rest of the session.
+class MULTIFILTEROUTPUT_EXPORT RegexCache
+{
+public:
+    explicit RegexCache(qsizetype capacity = 64);
+
+    // The returned reference is valid until the next get().
+    const QRegularExpression &get(const QString &patternText, bool caseSensitive);
+    qsizetype size() const;
+
+private:
+    qsizetype m_capacity;
+    QHash<QString, QRegularExpression> m_cache;
+};
 
 MULTIFILTEROUTPUT_EXPORT bool lineMatches(const Pattern &pattern, const QString &line);
 
