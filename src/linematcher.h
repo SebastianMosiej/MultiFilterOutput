@@ -15,13 +15,16 @@ class Pattern;
 
 // Compiled regular expressions, keyed by the two things that affect compilation: the pattern
 // text and case sensitivity. Bounded: when a new entry would exceed the capacity, the cache
-// starts over empty. The working set (at most two regexes per enabled pattern) is far below
-// the default capacity, so this only ever discards entries left behind by edited or deleted
-// patterns -- which an unbounded cache would keep for the rest of the session.
+// starts over empty. The working set (at most two regexes per enabled pattern) must stay
+// below the capacity: every line is matched against all of them in turn, so a working set
+// larger than the capacity would miss -- and recompile -- on every lookup (LRU eviction
+// wouldn't help; cyclic access defeats it too). The default takes 500+ enabled patterns to
+// reach, at a few MB of compiled expressions, so in practice this only discards entries left
+// behind by edited or deleted patterns -- which an unbounded cache would keep forever.
 class MULTIFILTEROUTPUT_EXPORT RegexCache
 {
 public:
-    explicit RegexCache(qsizetype capacity = 64);
+    explicit RegexCache(qsizetype capacity = 1024);
 
     // The returned reference is valid until the next get().
     const QRegularExpression &get(const QString &patternText, bool caseSensitive);

@@ -31,6 +31,7 @@ private slots:
     void breakerResetRearms();
     void regexCacheStaysWithinCapacity();
     void regexCacheKeepsCaseVariantsApart();
+    void regexCacheDefaultHoldsLargeWorkingSet();
 };
 
 void tst_LineMatcher::plainTextMatchCaseInsensitiveByDefault()
@@ -266,6 +267,17 @@ void tst_LineMatcher::regexCacheKeepsCaseVariantsApart()
     QVERIFY(cache.get("abc", /*caseSensitive=*/false).match("ABC").hasMatch());
     QVERIFY(!cache.get("abc", /*caseSensitive=*/true).match("ABC").hasMatch());
     QCOMPARE(cache.size(), 2);
+}
+
+// Every line is matched against every enabled pattern in turn, so if the working set ever
+// exceeded the capacity, "start over when full" would miss -- and recompile -- on every single
+// lookup. The default must comfortably exceed any realistic number of enabled patterns.
+void tst_LineMatcher::regexCacheDefaultHoldsLargeWorkingSet()
+{
+    RegexCache cache;
+    for (int i = 0; i < 300; ++i)
+        cache.get(QStringLiteral("pattern%1").arg(i), true);
+    QCOMPARE(cache.size(), 300);
 }
 
 QTEST_GUILESS_MAIN(tst_LineMatcher)
