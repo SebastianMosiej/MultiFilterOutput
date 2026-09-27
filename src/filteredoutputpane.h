@@ -16,6 +16,7 @@ class RunControl;
 }
 
 namespace MultiFilterOutput {
+class LineQueue;
 class OutputPaneTabWidget;
 class OutputTabWidget;
 }
@@ -44,6 +45,9 @@ public:
 private:
     void rebuildTabs(ProjectExplorer::RunControl *activeRunControl);
     void onLineReceived(const QString &line, Utils::OutputFormat format);
+    // Appends one line to "All" and to every pattern tab it belongs in; driven by
+    // m_lineQueue, never directly from onLineReceived().
+    void processLine(const QString &line, Utils::OutputFormat format);
     void onJumpRequested(int sourceLineId);
     void updateTabLabel(const Pattern &pattern, OutputTabWidget *tab, int count);
     // Matches the tab widget's pane background to OutputPaneTabBar's own painted background
@@ -65,6 +69,7 @@ private:
     };
 
     RunTracker *m_runTracker;
+    LineQueue *m_lineQueue = nullptr;
     QWidget *m_container = nullptr;
     OutputPaneTabWidget *m_tabWidget = nullptr;
     OutputTabWidget *m_allTab = nullptr;

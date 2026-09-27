@@ -2,6 +2,7 @@
 
 #include "filtersetaspect.h"
 #include "linematcher.h"
+#include "linequeue.h"
 #include "multifilteroutputconstants.h"
 #include "multifilteroutputtr.h"
 #include "outputpanesettings.h"
@@ -44,6 +45,11 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     settings->beginGroup(Constants::SETTINGS_GROUP);
     m_fontZoom = settings->value(Constants::OUTPUT_FONT_ZOOM_KEY, 0.0).toDouble();
     settings->endGroup();
+
+    m_lineQueue = new LineQueue(
+        [this](const QString &line, Utils::OutputFormat format) { processLine(line, format); },
+        std::chrono::milliseconds(10),
+        this);
 
     RunTracker *tracker = m_runTracker;
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);
@@ -90,6 +96,9 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
         entry.tab->deleteLater();
     }
     m_patternTabs.clear();
+    // Lines still queued belong to the run being replaced (or to the tab set being torn
+    // down); they must not land in the fresh tabs.
+    m_lineQueue->clear();
     // reset(), not clear(): the inherited QPlainTextEdit::clear() leaves the match count,
     // the source-block mapping and the formatter's carry-over buffer stale.
     m_allTab->reset();
@@ -215,6 +224,18 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
             popup(Core::IOutputPane::NoModeSwitch | Core::IOutputPane::WithFocus);
     }
 
+    // The pop above has to happen right here, in step with Application Output's own
+    // handling of this same signal; the per-line tab work (processLine()) is deferred to
+    // m_lineQueue, which runs it in time-limited slices so a burst of output can't freeze
+    // the GUI.
+    m_lineQueue->enqueue(line, format);
+}
+
+void FilteredOutputPane::processLine(const QString &line, Utils::OutputFormat format)
+{
+    if (!m_allTab)
+        return;
+
     // The "All" tab is the jump target, so its line id for this line is what every matching
     // pattern tab must record -- not an id of each tab's own.
     const int allLine = m_allTab->appendLine(line, format);
@@ -239,6 +260,7 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
 
 void FilteredOutputPane::clearContents()
 {
+    m_lineQueue->clear();
     if (m_allTab)
         m_allTab->reset();
     for (PatternTab &entry : m_patternTabs) {
