@@ -1,6 +1,7 @@
 #include "outputtabwidget.h"
 
 #include "multifilterlineparser.h"
+#include "multifilteroutputtr.h"
 
 #include <coreplugin/editormanager/editormanager.h>
 
@@ -17,11 +18,37 @@
 
 namespace MultiFilterOutput {
 
+namespace {
+
+// `line` as shown in a tab with the given setMaxLineLength(): cut after maxLength characters
+// (one fewer rather than separate a surrogate pair) and followed by how much was left out.
+QString displayText(const QString &line, int maxLength)
+{
+    if (maxLength <= 0 || line.size() <= maxLength)
+        return line;
+    qsizetype cut = maxLength;
+    if (cut > 1 && line.at(cut - 1).isHighSurrogate())
+        --cut;
+    return Tr::tr("%1 ... [%2 more characters not shown]")
+        .arg(line.left(cut))
+        .arg(line.size() - cut);
+}
+
+} // namespace
+
 OutputTabWidget::OutputTabWidget(QWidget *parent)
     : QPlainTextEdit(parent)
 {
     setReadOnly(true);
     setMaximumBlockCount(50000);
+
+    // Coalesces matchCountChanged(): appendLine() only starts this zero-interval timer, so a
+    // burst of matches appended within one event-loop pass costs a single tab relabel.
+    m_matchCountTimer.setSingleShot(true);
+    m_matchCountTimer.setInterval(0);
+    connect(&m_matchCountTimer, &QTimer::timeout, this, [this] {
+        emit matchCountChanged(m_matchCount);
+    });
     m_formatter.setPlainTextEdit(this);
 
     // Match Application Output's font, including live updates when the user changes it in
@@ -44,7 +71,7 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
         [](const Utils::Link &link) { Core::EditorManager::openEditorAt(link); });
 
     // Follow the end of the log like Application Output does. Any scroll -- the user's, or
-    // scrollToBlock()'s -- decides whether we keep following: leaving the bottom stops it,
+    // scrollToLine()'s -- decides whether we keep following: leaving the bottom stops it,
     // returning to the bottom resumes it. Appended lines (and resizes/zoom) only grow the
     // range, so while following, snap back to the new bottom whenever the range changes.
     QScrollBar *bar = verticalScrollBar();
@@ -63,26 +90,23 @@ void OutputTabWidget::setLinkParser(ProjectExplorer::Project *project)
 }
 
 int OutputTabWidget::appendLine(
-    const QString &line, Utils::OutputFormat format, int sourceBlockNumber, bool countsAsMatch)
+    const QString &line, Utils::OutputFormat format, int sourceLineId, bool countsAsMatch)
 {
-    m_formatter.appendMessage(line + "\n", format);
-    // appendMessage's trailing newline advances the cursor into a new, still-empty block, so
-    // the block that actually holds the line just appended is the one before the current
-    // last block.
-    const int myBlock = document()->blockCount() - 2;
-    m_sourceBlockNumbers.append(sourceBlockNumber >= 0 ? sourceBlockNumber : myBlock);
+    const int lineId = sourceLineId >= 0 ? sourceLineId : m_nextLineId++;
 
-    // setMaximumBlockCount() silently discards blocks off the front once the cap is hit;
-    // drop the matching front entries so the mapping stays aligned with the document.
-    const qsizetype cap = maximumBlockCount();
-    if (cap > 0 && m_sourceBlockNumbers.size() > cap)
-        m_sourceBlockNumbers.remove(0, m_sourceBlockNumbers.size() - cap);
+    m_formatter.appendMessage(displayText(line, m_maxLineLength) + "\n", format);
+    // appendMessage's trailing newline advances the cursor into a new, still-empty block, so
+    // the block that actually holds the line just appended is the one before the last.
+    // Nothing else sets userState on this document (there is no syntax highlighter), so it is
+    // free to carry the line id -- see the class comment.
+    document()->lastBlock().previous().setUserState(lineId);
 
     if (countsAsMatch) {
         ++m_matchCount;
-        emit matchCountChanged(m_matchCount);
+        if (!m_matchCountTimer.isActive())
+            m_matchCountTimer.start();
     }
-    return myBlock;
+    return lineId;
 }
 
 int OutputTabWidget::matchCount() const
@@ -99,19 +123,31 @@ void OutputTabWidget::reset()
     // leaving the formatter with an empty carry-over buffer.
     m_formatter.flush();
     m_formatter.clear();
-    m_sourceBlockNumbers.clear();
+    m_nextLineId = 0;
     m_matchCount = 0;
     m_followTail = true;
+    // Immediately, not coalesced: the label must not keep showing the old count until the
+    // next event-loop pass -- and a still-pending coalesced emission is now stale.
+    m_matchCountTimer.stop();
     emit matchCountChanged(m_matchCount);
 }
 
-void OutputTabWidget::scrollToBlock(int blockNumber)
+bool OutputTabWidget::scrollToLine(int lineId)
 {
-    const QTextBlock block = document()->findBlockByNumber(blockNumber);
-    if (!block.isValid())
-        return;
-    setTextCursor(QTextCursor(block));
-    centerCursor();
+    // Line ids only ever increase down the document, so walk up from the end: a jump target
+    // is usually recent, and hitting a smaller id means the line has already been trimmed.
+    // Blocks without an id (userState() == -1, e.g. the trailing empty block) are skipped.
+    for (QTextBlock block = document()->lastBlock(); block.isValid(); block = block.previous()) {
+        const int state = block.userState();
+        if (state == lineId) {
+            setTextCursor(QTextCursor(block));
+            centerCursor();
+            return true;
+        }
+        if (state >= 0 && state < lineId)
+            break;
+    }
+    return false;
 }
 
 void OutputTabWidget::setBaseFont(const QFont &newFont)
@@ -128,6 +164,11 @@ void OutputTabWidget::setBaseFont(const QFont &newFont)
 qreal OutputTabWidget::fontZoom() const
 {
     return font().pointSizeF() - m_baseFontSize;
+}
+
+void OutputTabWidget::setMaxLineLength(int maxLength)
+{
+    m_maxLineLength = maxLength;
 }
 
 void OutputTabWidget::setFontZoom(qreal zoom)
@@ -155,9 +196,7 @@ void OutputTabWidget::mouseReleaseEvent(QMouseEvent *event)
         if (!href.isEmpty()) {
             m_formatter.handleLink(href);
         } else {
-            const int blockNumber = cursorForPosition(event->pos()).blockNumber();
-            const bool known = blockNumber >= 0 && blockNumber < m_sourceBlockNumbers.size();
-            emit jumpRequested(known ? m_sourceBlockNumbers.at(blockNumber) : -1);
+            emit jumpRequested(cursorForPosition(event->pos()).block().userState());
         }
     }
 

@@ -2,6 +2,7 @@
 
 #include "filtersetaspect.h"
 #include "linematcher.h"
+#include "linequeue.h"
 #include "multifilteroutputconstants.h"
 #include "multifilteroutputtr.h"
 #include "outputpanesettings.h"
@@ -45,9 +46,26 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     m_fontZoom = settings->value(Constants::OUTPUT_FONT_ZOOM_KEY, 0.0).toDouble();
     settings->endGroup();
 
+    m_lineQueue = new LineQueue(
+        [this](const QString &line, Utils::OutputFormat format) { processLine(line, format); },
+        std::chrono::milliseconds(10),
+        this);
+
     RunTracker *tracker = m_runTracker;
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);
     connect(tracker, &RunTracker::activeRunLineReceived, this, &FilteredOutputPane::onLineReceived);
+
+    // One limit for every tab, changed live from the Pattern Library settings page.
+    connect(
+        &outputPaneSettings(),
+        &OutputPaneSettings::maxDisplayedLineLengthChanged,
+        this,
+        [this](int length) {
+            if (m_allTab)
+                m_allTab->setMaxLineLength(length);
+            for (const PatternTab &entry : std::as_const(m_patternTabs))
+                entry.tab->setMaxLineLength(length);
+        });
 }
 
 QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
@@ -59,6 +77,7 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
 
         m_allTab = new OutputTabWidget(m_tabWidget);
         m_allTab->setFontZoom(m_fontZoom);
+        m_allTab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
         connect(m_allTab, &OutputTabWidget::fontZoomChanged, this, &FilteredOutputPane::onTabZoomChanged);
         m_tabWidget->addTab(m_allTab, Tr::tr("All"));
 
@@ -90,6 +109,9 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
         entry.tab->deleteLater();
     }
     m_patternTabs.clear();
+    // Lines still queued belong to the run being replaced (or to the tab set being torn
+    // down); they must not land in the fresh tabs.
+    m_lineQueue->clear();
     // reset(), not clear(): the inherited QPlainTextEdit::clear() leaves the match count,
     // the source-block mapping and the formatter's carry-over buffer stale.
     m_allTab->reset();
@@ -128,6 +150,7 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
         auto *tab = new OutputTabWidget(m_tabWidget);
         tab->setLinkParser(project);
         tab->setFontZoom(m_fontZoom);
+        tab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
         connect(tab, &OutputTabWidget::matchCountChanged, this, [this, pattern, tab](int count) {
             updateTabLabel(pattern, tab, count);
         });
@@ -185,16 +208,17 @@ void FilteredOutputPane::updateTabLabel(const Pattern &pattern, OutputTabWidget 
         m_tabWidget->tabBar()->setTabTextColor(index, pattern.color);
 }
 
-void FilteredOutputPane::onJumpRequested(int sourceBlockNumber)
+void FilteredOutputPane::onJumpRequested(int sourceLineId)
 {
-    if (!m_tabWidget || !m_allTab || sourceBlockNumber < 0)
+    if (!m_tabWidget || !m_allTab || sourceLineId < 0)
         return;
     if (!outputPaneSettings().jumpToAllOnClick())
         return;
     // Switching to the "All" tab is half the point: scrolling a tab the user cannot see
-    // looks like nothing happened at all.
-    m_tabWidget->setCurrentWidget(m_allTab);
-    m_allTab->scrollToBlock(sourceBlockNumber);
+    // looks like nothing happened at all. But a line "All" has already trimmed off its front
+    // has nothing to show, so stay put rather than switch to an unrelated position.
+    if (m_allTab->scrollToLine(sourceLineId))
+        m_tabWidget->setCurrentWidget(m_allTab);
 }
 
 void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat format)
@@ -212,14 +236,26 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
             popup(Core::IOutputPane::NoModeSwitch | Core::IOutputPane::WithFocus);
     }
 
-    // The "All" tab is the jump target, so its block number for this line is what every
-    // matching pattern tab must record -- not each tab's own (identity) block index.
-    const int allBlock = m_allTab->appendLine(line, format);
+    // The pop above has to happen right here, in step with Application Output's own
+    // handling of this same signal; the per-line tab work (processLine()) is deferred to
+    // m_lineQueue, which runs it in time-limited slices so a burst of output can't freeze
+    // the GUI.
+    m_lineQueue->enqueue(line, format);
+}
+
+void FilteredOutputPane::processLine(const QString &line, Utils::OutputFormat format)
+{
+    if (!m_allTab)
+        return;
+
+    // The "All" tab is the jump target, so its line id for this line is what every matching
+    // pattern tab must record -- not an id of each tab's own.
+    const int allLine = m_allTab->appendLine(line, format);
 
     for (PatternTab &entry : m_patternTabs) {
         if (entry.inContinuation) {
             if (lineContinuesPattern(entry.pattern, line)) {
-                entry.tab->appendLine(line, format, allBlock, /*countsAsMatch=*/false);
+                entry.tab->appendLine(line, format, allLine, /*countsAsMatch=*/false);
                 continue;
             }
             // This line breaks the continuation run; fall through and re-check it as an
@@ -227,7 +263,7 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
             entry.inContinuation = false;
         }
         if (lineMatches(entry.pattern, line)) {
-            entry.tab->appendLine(line, format, allBlock);
+            entry.tab->appendLine(line, format, allLine);
             entry.inContinuation = entry.pattern.groupContinuationLines
                                     && !entry.pattern.continuationPattern.isEmpty();
         }
@@ -236,6 +272,7 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
 
 void FilteredOutputPane::clearContents()
 {
+    m_lineQueue->clear();
     if (m_allTab)
         m_allTab->reset();
     for (PatternTab &entry : m_patternTabs) {

@@ -65,6 +65,27 @@ void OutputPaneSettings::setFocusPaneOnRunStart(bool enabled)
     settings->sync();
 }
 
+int OutputPaneSettings::maxDisplayedLineLength() const
+{
+    return m_maxDisplayedLineLength;
+}
+
+void OutputPaneSettings::setMaxDisplayedLineLength(int length)
+{
+    length = qMax(0, length);
+    if (m_maxDisplayedLineLength == length)
+        return;
+    m_maxDisplayedLineLength = length;
+
+    Utils::QtcSettings *settings = Core::ICore::settings();
+    settings->beginGroup(Constants::SETTINGS_GROUP);
+    settings->setValue(Constants::MAX_DISPLAYED_LINE_LENGTH_KEY, length);
+    settings->endGroup();
+    settings->sync();
+
+    emit maxDisplayedLineLengthChanged(m_maxDisplayedLineLength);
+}
+
 void OutputPaneSettings::load()
 {
     Utils::QtcSettings *settings = Core::ICore::settings();
@@ -73,6 +94,11 @@ void OutputPaneSettings::load()
     m_jumpToAllOnClick = settings->value(Constants::JUMP_TO_ALL_ON_CLICK_KEY, true).toBool();
     m_focusPaneOnRunStart =
         settings->value(Constants::FOCUS_PANE_ON_RUN_START_KEY, false).toBool();
+    // Clamped like setMaxDisplayedLineLength(): a hand-edited negative value means no limit.
+    m_maxDisplayedLineLength = qMax(
+        0,
+        settings->value(Constants::MAX_DISPLAYED_LINE_LENGTH_KEY, DefaultMaxDisplayedLineLength)
+            .toInt());
     settings->endGroup();
     m_placement = atEnd ? OutputPanePlacement::AtEnd : OutputPanePlacement::NextToApplicationOutput;
 }
