@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.16)
+# 3.22: Qt 6 refuses older at find_package(Qt6) (QT_SUPPORTED_MIN_CMAKE_VERSION_FOR_USING_QT),
+# and the unit tests rely on the ENVIRONMENT_MODIFICATION test property (new in 3.22).
+cmake_minimum_required(VERSION 3.22)
 
 project(MultiFilterOutput)
 

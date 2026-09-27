@@ -101,8 +101,8 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
 - Qt 6 (Widgets module), matching the Qt version that Qt Creator was itself
   built with — 6.11 for the official Qt Creator 21 packages, which also need
   the `qttasktree` module (their `Utils` links `Qt6::TaskTree`).
-- CMake 3.16+, or 3.22+ to build the unit tests (they rely on the
-  `ENVIRONMENT_MODIFICATION` test property).
+- CMake 3.22+ — the minimum Qt 6 itself accepts, and what the unit tests
+  need (the `ENVIRONMENT_MODIFICATION` test property).
 - A C++20 compiler (tested with MSVC 2022 on Windows).
 
 ## Building
