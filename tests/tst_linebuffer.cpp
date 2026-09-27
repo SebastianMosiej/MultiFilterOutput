@@ -15,6 +15,10 @@ private slots:
     void carriageReturnNewlineHandled();
     void flushReturnsPendingPartialLineOnce();
     void flushDropsTrailingCarriageReturn();
+    void carriageReturnKeepsOnlyTextAfterIt();
+    void carriageReturnOverwritesAcrossChunks();
+    void trailingCarriageReturnsOnCompleteLineAreDropped();
+    void progressOutputDoesNotAccumulate();
     void unterminatedOutputIsEmittedInCappedPieces();
     void capAppliesAcrossChunks();
     void longCompleteLineIsSplitToo();
@@ -66,6 +70,42 @@ void tst_LineBuffer::flushDropsTrailingCarriageReturn()
     LineBuffer buf;
     QVERIFY(buf.feed("last\r").isEmpty());
     QCOMPARE(buf.flush(), QStringLiteral("last"));
+}
+
+// A lone "\r" returns to the start of the line and what follows replaces it, as in a
+// terminal and in Application Output (Utils::OutputFormatter::append()); patterns must match
+// the text the user actually sees, not text that was overwritten.
+void tst_LineBuffer::carriageReturnKeepsOnlyTextAfterIt()
+{
+    LineBuffer buf;
+    QCOMPARE(buf.feed("10%\r20%\r100%\n"), QStringList{"100%"});
+}
+
+void tst_LineBuffer::carriageReturnOverwritesAcrossChunks()
+{
+    LineBuffer buf;
+    QVERIFY(buf.feed("abc\r").isEmpty());
+    QCOMPARE(buf.feed("de\n"), QStringList{"de"});
+}
+
+// Utils::normalizeNewlines() collapses "\r\r\n" to "\n": the "\r"s end the line, they don't
+// wipe it.
+void tst_LineBuffer::trailingCarriageReturnsOnCompleteLineAreDropped()
+{
+    LineBuffer buf;
+    QCOMPARE(buf.feed("abc\r\r\n"), QStringList{"abc"});
+    QVERIFY(buf.feed("xyz\r\r").isEmpty());
+    QCOMPARE(buf.feed("\n"), QStringList{"xyz"});
+}
+
+// A progress bar redraws its line with "\r" and may not print a newline until it is done;
+// only the current state is kept, so nothing piles up or gets force-emitted by the cap.
+void tst_LineBuffer::progressOutputDoesNotAccumulate()
+{
+    LineBuffer buf(16);
+    for (int percent = 0; percent <= 100; ++percent)
+        QVERIFY(buf.feed(QStringLiteral("progress %1%\r").arg(percent)).isEmpty());
+    QCOMPARE(buf.flush(), QStringLiteral("progress 100%"));
 }
 
 // Output that never contains a newline (progress bars, binary dumps) must not pile up in the

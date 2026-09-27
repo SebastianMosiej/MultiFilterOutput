@@ -26,6 +26,34 @@ void takeCappedPieces(QString &text, qsizetype maxLength, QStringList &out)
     }
 }
 
+// Reduces a complete line to what a terminal -- and Application Output, see
+// Utils::OutputFormatter::append() -- displays for it. Trailing "\r"s just end the line
+// (Utils::normalizeNewlines() collapses "\r\r\n" to "\n"); any other "\r" returns to the
+// start of the line, so the text after the last one replaces everything before it.
+void applyCarriageReturns(QString &line)
+{
+    while (line.endsWith('\r'))
+        line.chop(1);
+    const qsizetype cr = line.lastIndexOf('\r');
+    if (cr >= 0)
+        line.remove(0, cr + 1);
+}
+
+// The same for the pending partial line, except that a trailing run of "\r"s is kept: it may
+// be the first half of a "\r\n" arriving in the next chunk. This is also what keeps a
+// progress bar (redrawn with "\r", no newline until it is done) from piling up.
+void applyCarriageReturnsToPartial(QString &partial)
+{
+    qsizetype end = partial.size();
+    while (end > 0 && partial.at(end - 1) == '\r')
+        --end;
+    if (end == 0)
+        return;
+    const qsizetype cr = partial.lastIndexOf('\r', end - 1);
+    if (cr >= 0)
+        partial.remove(0, cr + 1);
+}
+
 } // namespace
 
 LineBuffer::LineBuffer(qsizetype maxLineLength)
@@ -43,9 +71,11 @@ QStringList LineBuffer::feed(const QString &chunk)
 
     QStringList lines;
     for (QString &part : parts) {
+        applyCarriageReturns(part);
         takeCappedPieces(part, m_maxLineLength, lines);
         lines.append(part);
     }
+    applyCarriageReturnsToPartial(m_partial);
     // Only ever leaves a non-empty remainder behind, so a trailing "\r" -- possibly the first
     // half of a "\r\n" split across chunks -- always stays pending rather than being emitted.
     takeCappedPieces(m_partial, m_maxLineLength, lines);
@@ -55,9 +85,9 @@ QStringList LineBuffer::feed(const QString &chunk)
 QString LineBuffer::flush()
 {
     // feed() only normalizes a "\r\n" it sees whole, so a chunk ending between the two
-    // leaves the "\r" pending; with no "\n" coming it is line-ending residue, not content.
-    if (m_partial.endsWith('\r'))
-        m_partial.chop(1);
+    // leaves the "\r" pending; with no "\n" coming it is line-ending residue, not content --
+    // i.e. the pending line is now simply a complete one.
+    applyCarriageReturns(m_partial);
     return std::exchange(m_partial, QString());
 }
 

@@ -11,6 +11,9 @@
 
 namespace MultiFilterOutput {
 
+// Splits a stream of output chunks into complete lines. Lines are what a terminal (and
+// Application Output) would display: a lone "\r" returns to the start of the line, so only
+// the text after the last one is kept -- see applyCarriageReturns() in the .cpp.
 class MULTIFILTEROUTPUT_EXPORT LineBuffer
 {
 public:
