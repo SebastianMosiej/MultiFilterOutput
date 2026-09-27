@@ -59,9 +59,15 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   a line (QML warnings, `Q_ASSERT` failures, object-warning messages,
   including `qrc:` paths resolved back to your actual source files) to open
   it directly in the code editor.
+- **Long-line truncation** — lines longer than a configurable limit
+  (default 10 000 characters; set it to **No limit** to turn this off) are
+  shown cut short in every tab, followed by how many characters were left
+  out, so one enormous line can't stall the view. Patterns still match
+  against the whole line.
 - **Persists across restarts** — the Pattern Library, each run
-  configuration's filter selection, the pane position, the zoom level, and
-  the click-to-jump setting are all saved to Qt Creator's settings.
+  configuration's filter selection, the pane position, the zoom level, the
+  click-to-jump setting, and the maximum displayed line length are all saved
+  to Qt Creator's settings.
 - **Output survives the run** — a run's filtered tabs stay up after the
   process exits (matching Application Output's own behavior), so you can
   still review what happened after the app has closed. They only reset
@@ -159,8 +165,9 @@ Creator version — see **Requirements**.
 3. **(Optional) Configure the pane.** Still on the Pattern Library settings
    page: pick where the pane's status-bar button sits (**Output Pane
    Position**), whether clicking a line in a pattern tab should jump to
-   **All** or just behave like a normal text click, and whether the pane
-   should take focus away from **Application Output** when a run starts.
+   **All** or just behave like a normal text click, whether the pane
+   should take focus away from **Application Output** when a run starts, and
+   the **Maximum displayed line length** for all tabs.
 4. **Run your app.** A **MultiFilterOutput** button appears in the
    bottom-panel switcher next to **Application Output** (or at the end,
    per your position setting).
