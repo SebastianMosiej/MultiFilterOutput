@@ -19,6 +19,11 @@ public:
 
     QStringList enabledPatternIds() const;
     void setEnabledPatternIds(const QStringList &ids);
+    // Enables or disables one pattern, keeping the rest of the selection -- what toggling it
+    // from the MultiFilterOutput pane does to the run configuration. Like
+    // setEnabledPatternIds(), emits changed() when the selection actually changes, so an open
+    // Run Settings page shows it.
+    void setPatternEnabled(const QString &id, bool enabled);
 
     QVariant variantValue() const override;
 

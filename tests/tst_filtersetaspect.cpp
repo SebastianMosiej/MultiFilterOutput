@@ -4,6 +4,7 @@
 
 #include <utils/store.h>
 
+#include <QSignalSpy>
 #include <QtTest>
 
 using namespace MultiFilterOutput;
@@ -19,6 +20,8 @@ private slots:
     void seedsFromDefaultPatterns();
     void forgetsDeletedPatterns();
     void keepsIdsOfPatternsNotDeleted();
+    void setPatternEnabledTogglesOneId();
+    void selectionChangesAreSignalled();
 };
 
 void tst_FilterSetAspect::defaultsToEmpty()
@@ -106,6 +109,38 @@ void tst_FilterSetAspect::keepsIdsOfPatternsNotDeleted()
 
     QCOMPARE(aspect.enabledPatternIds(), (QStringList{"id-a", "unknown-id"}));
     patternLibrary().setPatterns({});
+}
+
+// Toggling a pattern from the pane changes just that one entry of the run configuration's
+// selection.
+void tst_FilterSetAspect::setPatternEnabledTogglesOneId()
+{
+    FilterSetAspect aspect(nullptr);
+    aspect.setEnabledPatternIds({"id-a", "id-b"});
+
+    aspect.setPatternEnabled("id-c", true);
+    QCOMPARE(aspect.enabledPatternIds(), (QStringList{"id-a", "id-b", "id-c"}));
+    aspect.setPatternEnabled("id-c", true); // already on
+    QCOMPARE(aspect.enabledPatternIds(), (QStringList{"id-a", "id-b", "id-c"}));
+    aspect.setPatternEnabled("id-a", false);
+    QCOMPARE(aspect.enabledPatternIds(), (QStringList{"id-b", "id-c"}));
+}
+
+// The Run Settings checkboxes rebuild on changed(); a selection changed from outside them
+// (the pane) must say so -- and only when it really changed.
+void tst_FilterSetAspect::selectionChangesAreSignalled()
+{
+    FilterSetAspect aspect(nullptr);
+    QSignalSpy changed(&aspect, &Utils::BaseAspect::changed);
+
+    aspect.setEnabledPatternIds({"id-a"});
+    QCOMPARE(changed.size(), 1);
+    aspect.setEnabledPatternIds({"id-a"});
+    QCOMPARE(changed.size(), 1);
+    aspect.setPatternEnabled("id-b", true);
+    QCOMPARE(changed.size(), 2);
+    aspect.setPatternEnabled("id-b", true);
+    QCOMPARE(changed.size(), 2);
 }
 
 QTEST_GUILESS_MAIN(tst_FilterSetAspect)

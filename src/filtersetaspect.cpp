@@ -119,6 +119,11 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
         };
         rebuild();
         connect(&patternLibrary(), &PatternLibrary::patternsChanged, this, rebuild);
+        // ...and when the selection is changed from outside these checkboxes (from the
+        // MultiFilterOutput pane, see setPatternEnabled()). The checkboxes' own toggles edit
+        // m_enabledPatternIds directly, without changed(), so a checkbox is never deleted from
+        // inside its own signal.
+        connect(this, &Utils::BaseAspect::changed, this, rebuild);
 
         return details;
     });
@@ -131,7 +136,20 @@ QStringList FilterSetAspect::enabledPatternIds() const
 
 void FilterSetAspect::setEnabledPatternIds(const QStringList &ids)
 {
+    if (ids == m_enabledPatternIds)
+        return;
     m_enabledPatternIds = ids;
+    emit changed();
+}
+
+void FilterSetAspect::setPatternEnabled(const QString &id, bool enabled)
+{
+    QStringList ids = m_enabledPatternIds;
+    if (enabled && !ids.contains(id))
+        ids.append(id);
+    else if (!enabled)
+        ids.removeAll(id);
+    setEnabledPatternIds(ids);
 }
 
 QVariant FilterSetAspect::variantValue() const
