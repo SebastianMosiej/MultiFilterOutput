@@ -102,6 +102,21 @@ QList<OutputLineSplitter::Line> OutputLineSplitter::feed(
     const QString &chunk, Utils::OutputFormat format)
 {
     QList<Line> result;
+    // One of Qt Creator's own messages about the run ("Starting ...", "... exited with code
+    // 0", "... crashed") can't be continuing a line of the app's output, so it ends any
+    // pending stdout/stderr fragment first -- keeping, say, a final unterminated "Done." ahead
+    // of the exit message, as in Application Output. Only these two formats: others (debug,
+    // log) can arrive mid-run, where ending the app's line early would split it.
+    if (format == Utils::NormalMessageFormat || format == Utils::ErrorMessageFormat) {
+        for (const Utils::OutputFormat appFormat : {Utils::StdOutFormat, Utils::StdErrFormat}) {
+            const auto it = m_buffers.find(appFormat);
+            if (it == m_buffers.end())
+                continue;
+            const QString pending = it.value().flush();
+            if (!pending.isEmpty())
+                result.append({pending, appFormat});
+        }
+    }
     for (const QString &line : m_buffers[format].feed(chunk))
         result.append({line, format});
     return result;

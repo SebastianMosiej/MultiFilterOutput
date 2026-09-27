@@ -27,6 +27,7 @@ private slots:
     void capAtExactLengthThenSplitCrLf();
     void splitterKeepsInterleavedFormatsApart();
     void splitterFlushReturnsEveryFormatsPendingLine();
+    void creatorMessageEndsPendingAppLines();
 };
 
 void tst_LineBuffer::singleCompleteLine()
@@ -196,6 +197,26 @@ void tst_LineBuffer::splitterFlushReturnsEveryFormatsPendingLine()
     QCOMPARE(flushed.at(1).text, QStringLiteral("err tail"));
     QCOMPARE(flushed.at(1).format, Utils::StdErrFormat);
 
+    QVERIFY(splitter.flush().isEmpty());
+}
+
+// A final "Done." without a newline must come before Qt Creator's own "... exited with code
+// 0" in All, as in Application Output -- not after it, when the run is finally untracked.
+void tst_LineBuffer::creatorMessageEndsPendingAppLines()
+{
+    OutputLineSplitter splitter;
+    QVERIFY(splitter.feed("Done.", Utils::StdOutFormat).isEmpty());
+    QVERIFY(splitter.feed("oops", Utils::StdErrFormat).isEmpty());
+
+    const QList<OutputLineSplitter::Line> lines
+        = splitter.feed("MyApp exited with code 0\n", Utils::NormalMessageFormat);
+
+    QCOMPARE(lines.size(), 3);
+    QCOMPARE(lines.at(0).text, QStringLiteral("Done."));
+    QCOMPARE(lines.at(0).format, Utils::StdOutFormat);
+    QCOMPARE(lines.at(1).text, QStringLiteral("oops"));
+    QCOMPARE(lines.at(1).format, Utils::StdErrFormat);
+    QCOMPARE(lines.at(2).text, QStringLiteral("MyApp exited with code 0"));
     QVERIFY(splitter.flush().isEmpty());
 }
 

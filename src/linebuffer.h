@@ -38,7 +38,9 @@ private:
 // Qt Creator's own messages, ...) in a LineBuffer of its own. A single shared buffer would
 // glue an unterminated fragment of one stream onto the next chunk of another -- common in
 // practice, since stdout is block-buffered when piped while stderr is not -- producing one
-// line that belongs to neither stream and truncating the fragment's own line.
+// line that belongs to neither stream and truncating the fragment's own line. The one
+// exception: a message from Qt Creator itself about the run ends pending app output first
+// (see feed()).
 class MULTIFILTEROUTPUT_EXPORT OutputLineSplitter
 {
 public:
