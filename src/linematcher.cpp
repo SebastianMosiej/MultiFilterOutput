@@ -2,6 +2,7 @@
 
 #include "pattern.h"
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QRegularExpression>
 
@@ -51,6 +52,39 @@ bool lineMatches(const Pattern &pattern, const QString &line)
         matched = line.contains(pattern.patternText, cs);
     }
     return matched != pattern.invert;
+}
+
+SlowMatchBreaker::SlowMatchBreaker(std::chrono::milliseconds slowThreshold, int maxStrikes)
+    : m_slowThreshold(slowThreshold)
+    , m_maxStrikes(maxStrikes)
+{}
+
+bool SlowMatchBreaker::run(const std::function<bool()> &match)
+{
+    if (isTripped())
+        return false;
+
+    const auto timed = [&match](bool &result) {
+        QElapsedTimer timer;
+        timer.start();
+        result = match();
+        return timer.durationElapsed();
+    };
+
+    bool result = false;
+    if (timed(result) > m_slowThreshold && timed(result) > m_slowThreshold)
+        ++m_strikes;
+    return result;
+}
+
+bool SlowMatchBreaker::isTripped() const
+{
+    return m_strikes >= m_maxStrikes;
+}
+
+void SlowMatchBreaker::reset()
+{
+    m_strikes = 0;
 }
 
 bool lineContinuesPattern(const Pattern &pattern, const QString &line)

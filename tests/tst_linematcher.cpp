@@ -3,6 +3,10 @@
 
 #include <QtTest>
 
+#include <thread>
+
+using namespace std::chrono_literals;
+
 using namespace MultiFilterOutput;
 
 class tst_LineMatcher : public QObject
@@ -21,6 +25,10 @@ private slots:
     void continuationInvalidRegexFailsSafe();
     void catastrophicRegexStaysBounded_data();
     void catastrophicRegexStaysBounded();
+    void breakerPassesResultsThroughWhileFast();
+    void breakerTripsAfterRepeatedSlowMatches();
+    void breakerForgivesOneOffStall();
+    void breakerResetRearms();
 };
 
 void tst_LineMatcher::plainTextMatchCaseInsensitiveByDefault()
@@ -169,6 +177,71 @@ void tst_LineMatcher::catastrophicRegexStaysBounded()
     lineMatches(p, line);
     const qint64 ms = timer.elapsed();
     QVERIFY2(ms < 500, qPrintable(QString("took %1 ms").arg(ms)));
+}
+
+void tst_LineMatcher::breakerPassesResultsThroughWhileFast()
+{
+    SlowMatchBreaker breaker;
+    for (int i = 0; i < 100; ++i) {
+        QCOMPARE(breaker.run([] { return true; }), true);
+        QCOMPARE(breaker.run([] { return false; }), false);
+    }
+    QVERIFY(!breaker.isTripped());
+}
+
+// A match that is slow every time is a genuinely pathological pattern: after maxStrikes of
+// them the breaker trips, and from then on the match isn't even attempted.
+void tst_LineMatcher::breakerTripsAfterRepeatedSlowMatches()
+{
+    SlowMatchBreaker breaker(10ms, 3);
+    int calls = 0;
+    const auto slowMatch = [&] {
+        ++calls;
+        std::this_thread::sleep_for(15ms);
+        return true;
+    };
+
+    QCOMPARE(breaker.run(slowMatch), true);
+    QCOMPARE(breaker.run(slowMatch), true);
+    QVERIFY(!breaker.isTripped());
+    breaker.run(slowMatch);
+    QVERIFY(breaker.isTripped());
+
+    const int callsWhenTripped = calls;
+    QCOMPARE(breaker.run(slowMatch), false);
+    QCOMPARE(calls, callsWhenTripped);
+}
+
+// One slow match followed by a fast repeat is the OS stalling us, not the pattern.
+void tst_LineMatcher::breakerForgivesOneOffStall()
+{
+    SlowMatchBreaker breaker(10ms, 1);
+    bool stalled = false;
+    const auto stallOnce = [&] {
+        if (!stalled) {
+            stalled = true;
+            std::this_thread::sleep_for(15ms);
+        }
+        return true;
+    };
+
+    QCOMPARE(breaker.run(stallOnce), true);
+    QVERIFY(!breaker.isTripped());
+}
+
+// A new run gets a fresh chance: the output (and so what the pattern chokes on) may differ.
+void tst_LineMatcher::breakerResetRearms()
+{
+    SlowMatchBreaker breaker(10ms, 1);
+    breaker.run([] {
+        std::this_thread::sleep_for(15ms);
+        return true;
+    });
+    QVERIFY(breaker.isTripped());
+
+    breaker.reset();
+    QVERIFY(!breaker.isTripped());
+    QCOMPARE(breaker.run([] { return true; }), true);
 }
 
 QTEST_GUILESS_MAIN(tst_LineMatcher)
