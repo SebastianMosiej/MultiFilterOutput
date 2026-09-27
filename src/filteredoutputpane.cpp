@@ -24,6 +24,7 @@
 
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QInputDialog>
 #include <QLabel>
 #include <QMessageBox>
 #include <QRegularExpression>
@@ -50,6 +51,9 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     // pane -- see OutputPaneSettings.
     setPriorityInStatusBar(
         outputPaneSettings().placement() == OutputPanePlacement::AtEnd ? 0 : 50);
+    // The same filter box as Application Output's; enabled once the tabs exist.
+    setupFilterUi("MultiFilterOutput.Filter", "MultiFilterOutput::Internal::FilteredOutputPane");
+    setFilteringEnabled(false);
 
     Utils::QtcSettings *settings = Core::ICore::settings();
     settings->beginGroup(Constants::SETTINGS_GROUP);
@@ -104,6 +108,10 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
         setupContext(Utils::Id(Constants::PANE_CONTEXT), m_container);
         // Next/previous-match navigation works on the current tab.
         connect(m_tabWidget, &QTabWidget::currentChanged, this, &IOutputPane::navigateStateChanged);
+        // The quick filter applies to the current tab, so re-apply it to whichever becomes
+        // current (a no-op for a tab that already has it).
+        connect(m_tabWidget, &QTabWidget::currentChanged, this, &FilteredOutputPane::updateFilter);
+        setFilteringEnabled(true);
 
         m_allTab = new OutputTabWidget(m_tabWidget);
         m_allTab->setFontZoom(m_fontZoom);
@@ -143,20 +151,78 @@ QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
         m_copyButton->setToolTip(Tr::tr("Copy the current tab's contents"));
         connect(m_copyButton, &QToolButton::clicked, self, &FilteredOutputPane::copyCurrentTab);
 
+        self->m_saveFilterButton = new QToolButton;
+        m_saveFilterButton->setText(Tr::tr("Save as Pattern..."));
+        m_saveFilterButton->setToolTip(
+            Tr::tr("Add the current filter to the Pattern Library, to enable it for run "
+                   "configurations in their Output Filters settings."));
+        m_saveFilterButton->setEnabled(!filterText().isEmpty());
+        connect(m_saveFilterButton, &QToolButton::clicked, self, &FilteredOutputPane::saveFilterAsPattern);
+
         self->m_saveButton = new QToolButton;
         m_saveButton->setIcon(Utils::Icons::SAVEFILE_TOOLBAR.icon());
         m_saveButton->setToolTip(Tr::tr("Save the current tab to a file..."));
         connect(m_saveButton, &QToolButton::clicked, self, &FilteredOutputPane::saveCurrentTab);
     }
-    // IOutputPane's own widgets are the zoom in/out buttons (see zoomBy()).
-    return IOutputPane::toolBarWidgets() << m_wrapButton << m_copyButton << m_saveButton
-                                         << m_runLabel;
+    // IOutputPane's own widgets: the filter box (see updateFilter()) and the zoom buttons.
+    return IOutputPane::toolBarWidgets() << m_saveFilterButton << m_wrapButton << m_copyButton
+                                         << m_saveButton << m_runLabel;
 }
 
 void FilteredOutputPane::applyWordWrap(OutputTabWidget *tab)
 {
     tab->setLineWrapMode(
         outputPaneSettings().wordWrap() ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
+}
+
+bool FilteredOutputPane::hasFilterContext() const
+{
+    return true;
+}
+
+void FilteredOutputPane::updateFilter()
+{
+    if (m_saveFilterButton)
+        m_saveFilterButton->setEnabled(!filterText().isEmpty());
+    if (OutputTabWidget *tab = currentTab()) {
+        LineFilter filter;
+        filter.text = filterText();
+        filter.isRegex = filterUsesRegexp();
+        filter.caseSensitivity = filterCaseSensitivity();
+        filter.inverted = filterIsInverted();
+        filter.beforeContext = beforeContext();
+        filter.afterContext = afterContext();
+        tab->setFilter(filter);
+    }
+}
+
+void FilteredOutputPane::saveFilterAsPattern()
+{
+    if (filterText().isEmpty())
+        return;
+    bool ok = false;
+    const QString name = QInputDialog::getText(
+        Core::ICore::dialogParent(),
+        Tr::tr("Save Filter as Pattern"),
+        Tr::tr("Pattern name:"),
+        QLineEdit::Normal,
+        filterText(),
+        &ok);
+    if (!ok || name.trimmed().isEmpty())
+        return;
+    // Only the filter's text, regex, case and invert carry over; a pattern has no notion of
+    // context lines.
+    Pattern pattern = Pattern::createNew();
+    pattern.name = name.trimmed();
+    pattern.patternText = filterText();
+    pattern.isRegex = filterUsesRegexp();
+    pattern.caseSensitive = filterCaseSensitivity() == Qt::CaseSensitive;
+    pattern.invert = filterIsInverted();
+    patternLibrary().addOrUpdate(pattern); // persisted right away (see PatternLibrary::load())
+    Core::MessageManager::writeSilently(
+        Tr::tr("MultiFilterOutput: added pattern \"%1\" to the Pattern Library. Enable it for a "
+               "run configuration under Run Settings > Output Filters.")
+            .arg(pattern.name));
 }
 
 void FilteredOutputPane::zoomBy(qreal points)

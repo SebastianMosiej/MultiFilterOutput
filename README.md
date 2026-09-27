@@ -56,6 +56,11 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   settings page. (If *Application Output*'s own "Open Application Output when
   running" preference is set to **Always** rather than the default **On First
   Output Only**, it can still reclaim focus on later output lines.)
+- **Quick filter** — the same *Filter output...* box as *Application
+  Output*, in the pane's toolbar: narrows the current tab to matching lines
+  (text or regex, case, show non-matching, N context lines) without touching
+  the Pattern Library, and keeps filtering as output arrives.
+  **Save as Pattern...** turns a filter worth keeping into a pattern.
 - **Find (Ctrl+F)** — search any tab (**All** or a pattern tab) with Qt
   Creator's usual Find toolbar, like in *Application Output*: find
   next/previous, case sensitivity, whole words, regular expressions.

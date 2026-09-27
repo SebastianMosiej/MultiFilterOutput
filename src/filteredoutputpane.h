@@ -39,6 +39,9 @@ public:
     bool hasFocus() const override;
     bool canFocus() const override;
     bool canNavigate() const override;
+    // The "Filter output..." box: filters the current tab, like Application Output's.
+    bool hasFilterContext() const override;
+    void updateFilter() override;
     bool canNext() const override;
     bool canPrevious() const override;
     void goToNext() override;
@@ -53,6 +56,8 @@ private:
     void copyCurrentTab();
     void saveCurrentTab();
     void applyWordWrap(OutputTabWidget *tab);
+    // Turns the quick filter into a Pattern Library entry.
+    void saveFilterAsPattern();
     // Steps the current tab to its next/previous match and keeps All at the same line.
     void goToMatch(OutputTabWidget::Direction direction);
     void onLineReceived(const QString &line, Utils::OutputFormat format);
@@ -97,6 +102,7 @@ private:
     QToolButton *m_wrapButton = nullptr;
     QToolButton *m_copyButton = nullptr;
     QToolButton *m_saveButton = nullptr;
+    QToolButton *m_saveFilterButton = nullptr;
     // The active run's applicationProcessHandleChanged -> updateRunLabel() connection.
     QMetaObject::Connection m_pidConnection;
     qreal m_fontZoom = 0;
