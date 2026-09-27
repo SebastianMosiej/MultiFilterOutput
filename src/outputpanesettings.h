@@ -33,15 +33,26 @@ public:
     bool focusPaneOnRunStart() const;
     void setFocusPaneOnRunStart(bool enabled);
 
+    static constexpr int DefaultMaxDisplayedLineLength = 10000;
+
+    // How many characters of a line every tab (All and each pattern tab) shows before cutting
+    // it short -- see OutputTabWidget::setMaxLineLength(). 0 means no limit. Unlike the two
+    // settings above this has a change signal: FilteredOutputPane pushes a new value to its
+    // open tabs straight away. Only affects lines appended after the change.
+    int maxDisplayedLineLength() const;
+    void setMaxDisplayedLineLength(int length);
+
     void load();
 
 signals:
     void placementChanged(OutputPanePlacement placement);
+    void maxDisplayedLineLengthChanged(int length);
 
 private:
     OutputPanePlacement m_placement = OutputPanePlacement::NextToApplicationOutput;
     bool m_jumpToAllOnClick = true;
     bool m_focusPaneOnRunStart = false;
+    int m_maxDisplayedLineLength = DefaultMaxDisplayedLineLength;
 };
 
 MULTIFILTEROUTPUT_EXPORT OutputPaneSettings &outputPaneSettings();

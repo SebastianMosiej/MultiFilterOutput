@@ -25,6 +25,7 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QRegularExpression>
+#include <QSpinBox>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -126,6 +127,30 @@ public:
         connect(focusOnRunStartCheck, &QCheckBox::toggled, this, [](bool checked) {
             outputPaneSettings().setFocusPaneOnRunStart(checked);
         });
+
+        auto *maxLineLengthSpin = new QSpinBox(this);
+        maxLineLengthSpin->setRange(0, 10'000'000);
+        maxLineLengthSpin->setSingleStep(1000);
+        maxLineLengthSpin->setSpecialValueText(Tr::tr("No limit"));
+        maxLineLengthSpin->setSuffix(Tr::tr(" characters"));
+        maxLineLengthSpin->setValue(outputPaneSettings().maxDisplayedLineLength());
+        maxLineLengthSpin->setToolTip(
+            Tr::tr("Lines longer than this are shown cut short in every MultiFilterOutput tab, "
+                   "followed by how many characters were left out. Very long lines slow the "
+                   "output view down. Patterns still match against the whole line. "
+                   "Applies to output arriving after the change."));
+        // Only commit on Enter, focus-out or the arrows -- not on every keystroke, each of
+        // which would otherwise persist and push a half-typed limit to every open tab.
+        maxLineLengthSpin->setKeyboardTracking(false);
+        // Persists immediately like the settings above; FilteredOutputPane applies it to its
+        // open tabs right away, via OutputPaneSettings::maxDisplayedLineLengthChanged().
+        connect(maxLineLengthSpin, &QSpinBox::valueChanged, this, [](int value) {
+            outputPaneSettings().setMaxDisplayedLineLength(value);
+        });
+        auto *maxLineLengthRow = new QHBoxLayout;
+        maxLineLengthRow->addWidget(new QLabel(Tr::tr("Maximum displayed line length:"), this));
+        maxLineLengthRow->addWidget(maxLineLengthSpin);
+        maxLineLengthRow->addStretch();
 
         m_tree = new PatternTreeWidget(this);
         m_tree->setColumnCount(7);
@@ -231,6 +256,7 @@ public:
         layout->addWidget(placementGroup);
         layout->addWidget(jumpToAllCheck);
         layout->addWidget(focusOnRunStartCheck);
+        layout->addLayout(maxLineLengthRow);
         layout->addLayout(topRow);
         layout->addLayout(form);
 

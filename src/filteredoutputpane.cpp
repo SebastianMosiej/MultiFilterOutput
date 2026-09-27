@@ -54,6 +54,18 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     RunTracker *tracker = m_runTracker;
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);
     connect(tracker, &RunTracker::activeRunLineReceived, this, &FilteredOutputPane::onLineReceived);
+
+    // One limit for every tab, changed live from the Pattern Library settings page.
+    connect(
+        &outputPaneSettings(),
+        &OutputPaneSettings::maxDisplayedLineLengthChanged,
+        this,
+        [this](int length) {
+            if (m_allTab)
+                m_allTab->setMaxLineLength(length);
+            for (const PatternTab &entry : std::as_const(m_patternTabs))
+                entry.tab->setMaxLineLength(length);
+        });
 }
 
 QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
@@ -65,6 +77,7 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
 
         m_allTab = new OutputTabWidget(m_tabWidget);
         m_allTab->setFontZoom(m_fontZoom);
+        m_allTab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
         connect(m_allTab, &OutputTabWidget::fontZoomChanged, this, &FilteredOutputPane::onTabZoomChanged);
         m_tabWidget->addTab(m_allTab, Tr::tr("All"));
 
@@ -139,6 +152,7 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
         auto *tab = new OutputTabWidget(m_tabWidget);
         tab->setLinkParser(project);
         tab->setFontZoom(m_fontZoom);
+        tab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
         connect(tab, &OutputTabWidget::matchCountChanged, this, [this, pattern, tab](int count) {
             updateTabLabel(pattern, tab, count);
         });
