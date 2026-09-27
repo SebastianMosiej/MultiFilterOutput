@@ -4,9 +4,11 @@
 #include "multifilteroutputtr.h"
 
 #include <coreplugin/editormanager/editormanager.h>
+#include <coreplugin/find/basetextfind.h>
 
 #include <texteditor/fontsettings.h>
 
+#include <utils/aggregate.h>
 #include <utils/link.h>
 
 #include <QAbstractScrollArea>
@@ -83,6 +85,12 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
 {
     setReadOnly(true);
     setMaximumBlockCount(50000);
+
+    // Ctrl+F: Qt Creator's Find toolbar searches the IFindSupport aggregated with the focused
+    // widget (or a parent), and every output pane shares a Find toolbar placeholder -- so
+    // this is all it takes, exactly as Core::OutputWindow does it. The aggregate owns the
+    // find support and deletes it along with this widget.
+    Utils::Aggregation::aggregate({this, new Core::BaseTextFind<QPlainTextEdit>(this)});
 
     // Coalesces matchCountChanged(): appendLine() only starts this zero-interval timer, so a
     // burst of matches appended within one event-loop pass costs a single tab relabel.

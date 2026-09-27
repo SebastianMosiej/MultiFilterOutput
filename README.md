@@ -51,6 +51,9 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   settings page. (If *Application Output*'s own "Open Application Output when
   running" preference is set to **Always** rather than the default **On First
   Output Only**, it can still reclaim focus on later output lines.)
+- **Find (Ctrl+F)** — search any tab (**All** or a pattern tab) with Qt
+  Creator's usual Find toolbar, like in *Application Output*: find
+  next/previous, case sensitivity, whole words, regular expressions.
 - **Click-to-jump** — click any line in a filtered tab to jump to and
   highlight that same line in **All**, recovering the surrounding context a
   filtered view strips away. Can be turned off from the Pattern Library

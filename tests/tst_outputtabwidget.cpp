@@ -1,5 +1,9 @@
 #include "../src/outputtabwidget.h"
 
+#include <coreplugin/find/ifindsupport.h>
+
+#include <utils/aggregate.h>
+
 #include <QSignalSpy>
 #include <QTextBlock>
 #include <QtTest>
@@ -25,6 +29,7 @@ private slots:
     void truncationNeverSplitsEscapeSequence();
     void lineIdsWrapInsteadOfOverflowing();
     void lineIdAgeAcrossTheWrap();
+    void ctrlFFindsTextInTab();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -248,6 +253,22 @@ void tst_OutputTabWidget::lineIdAgeAcrossTheWrap()
     // Not appended yet (or from before a reset): far older than any tab holds.
     QCOMPARE(lineIdAge(10, 12, 100), 98);
     QCOMPARE(lineIdAge(1, LineIdModulus - 1), 2);
+}
+
+// Qt Creator's Find toolbar (Ctrl+F) searches whatever IFindSupport it finds aggregated with
+// the focused widget or one of its parents -- the same lookup used here.
+void tst_OutputTabWidget::ctrlFFindsTextInTab()
+{
+    OutputTabWidget tab;
+    tab.appendLine("first line", Utils::StdOutFormat);
+    tab.appendLine("the needle is here", Utils::StdOutFormat);
+
+    auto *find = Utils::Aggregation::query<Core::IFindSupport>(&tab);
+    QVERIFY(find);
+    QCOMPARE(find->findStep("needle", {}), Core::IFindSupport::Found);
+    QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("needle"));
+    QCOMPARE(tab.textCursor().block().text(), QStringLiteral("the needle is here"));
+    QCOMPARE(find->findStep("absent", {}), Core::IFindSupport::NotFound);
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

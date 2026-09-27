@@ -117,7 +117,7 @@ if(WITH_TESTS)
   )
   add_qtc_test(tst_outputtabwidget
     SOURCES tests/tst_outputtabwidget.cpp
-    DEPENDS MultiFilterOutput
+    DEPENDS MultiFilterOutput QtCreator::Core
   )
   add_qtc_test(tst_linequeue
     SOURCES tests/tst_linequeue.cpp
