@@ -2,6 +2,8 @@
 
 #include <QElapsedTimer>
 
+#include <utility>
+
 namespace MultiFilterOutput {
 
 LineQueue::LineQueue(Sink sink, std::chrono::milliseconds budget, QObject *parent)
@@ -16,9 +18,23 @@ LineQueue::LineQueue(Sink sink, std::chrono::milliseconds budget, QObject *paren
     connect(&m_timer, &QTimer::timeout, this, &LineQueue::processPending);
 }
 
+void LineQueue::setOverflowHandling(qsizetype maxQueuedCharacters, DiscardSink onDiscarded)
+{
+    m_maxQueuedCharacters = maxQueuedCharacters;
+    m_discardSink = std::move(onDiscarded);
+}
+
 void LineQueue::enqueue(const QString &line, Utils::OutputFormat format)
 {
     m_queue.enqueue({line, format});
+    m_queuedCharacters += line.size();
+    if (m_queuedCharacters > m_maxQueuedCharacters) {
+        // Oldest first, down to half the cap; the newest line always stays.
+        while (m_queue.size() > 1 && m_queuedCharacters > m_maxQueuedCharacters / 2) {
+            m_queuedCharacters -= m_queue.dequeue().first.size();
+            ++m_discardedPending;
+        }
+    }
     if (!m_timer.isActive())
         m_timer.start();
 }
@@ -26,6 +42,8 @@ void LineQueue::enqueue(const QString &line, Utils::OutputFormat format)
 void LineQueue::clear()
 {
     m_queue.clear();
+    m_queuedCharacters = 0;
+    m_discardedPending = 0;
     m_timer.stop();
 }
 
@@ -41,7 +59,15 @@ int LineQueue::processPending()
 
     int processed = 0;
     while (!m_queue.isEmpty()) {
+        // Everything dropped came before whatever is still queued.
+        if (m_discardedPending > 0) {
+            if (m_discardSink)
+                m_discardSink(std::exchange(m_discardedPending, 0));
+            else
+                m_discardedPending = 0;
+        }
         const auto [line, format] = m_queue.dequeue();
+        m_queuedCharacters -= line.size();
         m_sink(line, format);
         ++processed;
         if (elapsed.durationElapsed() >= m_budget)
