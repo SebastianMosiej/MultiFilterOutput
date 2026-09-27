@@ -63,7 +63,16 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   (default 10 000 characters; set it to **No limit** to turn this off) are
   shown cut short in every tab, followed by how many characters were left
   out, so one enormous line can't stall the view. Patterns still match
-  against the whole line.
+  against the whole line. (Separately, output with no line break for more
+  than 64 KiB — a binary dump, say — is split into 64 KiB pieces before
+  matching, so a pattern can't match across such a split.)
+- **Carriage returns behave like a terminal** — a progress bar that redraws
+  its line with `\r` shows, and is matched as, only its latest state.
+- **Slow patterns switch themselves off** — if matching a regular
+  expression repeatedly takes too long (catastrophic backtracking, e.g.
+  nested quantifiers like `(a+)+`), that pattern stops being evaluated for
+  the rest of the run; its tab says `- disabled: too slow` and General
+  Messages explains. The next run gives it a fresh chance.
 - **Persists across restarts** — the Pattern Library, each run
   configuration's filter selection, the pane position, the zoom level, the
   click-to-jump setting, and the maximum displayed line length are all saved
