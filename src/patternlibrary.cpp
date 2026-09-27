@@ -3,8 +3,6 @@
 #include "multifilteroutputconstants.h"
 #include "multifilteroutputtr.h"
 
-#include <coreplugin/messagemanager.h>
-
 #include <utils/qtcsettings.h>
 
 #include <QRegularExpression>
@@ -81,7 +79,7 @@ void PatternLibrary::commitChange(const QStringList &removedIds)
     emit patternsChanged();
 }
 
-void PatternLibrary::load(Utils::QtcSettings *settings)
+QStringList PatternLibrary::load(Utils::QtcSettings *settings)
 {
     m_patterns.clear();
     m_settings = settings;
@@ -113,12 +111,10 @@ void PatternLibrary::load(Utils::QtcSettings *settings)
 
     settings->endGroup();
 
-    // General Messages rather than a debug log: these need the user to look at the Pattern
-    // Library, and the log is not somewhere they would ever see them.
-    for (const QString &problem : validatePatterns(m_patterns))
-        Core::MessageManager::writeSilently(Tr::tr("MultiFilterOutput: %1").arg(problem));
+    const QStringList problems = validatePatterns(m_patterns);
 
     emit patternsChanged();
+    return problems;
 }
 
 void PatternLibrary::save() const

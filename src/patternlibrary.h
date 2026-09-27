@@ -37,8 +37,10 @@ public:
     // Reads the library from `settings` and remembers them as where it lives: from then on
     // every change (addOrUpdate(), remove(), setPatterns()) is written straight back, so no
     // caller can forget to persist one. A library that has never been loaded -- e.g. a
-    // local one in a unit test -- keeps its changes in memory only.
-    void load(Utils::QtcSettings *settings);
+    // local one in a unit test -- keeps its changes in memory only. Returns a human-readable
+    // description of every problem found in what was read (see validatePatterns()), for the
+    // caller to show the user.
+    QStringList load(Utils::QtcSettings *settings);
     // Writes the library to the settings it was loaded from; does nothing if it never was.
     void save() const;
 
