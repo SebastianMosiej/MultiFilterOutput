@@ -66,6 +66,18 @@ QString displayText(const QString &line, int maxLength)
 
 } // namespace
 
+int nextLineId(int id, int modulus)
+{
+    return id + 1 >= modulus ? 0 : id + 1;
+}
+
+qint64 lineIdAge(int newest, int target, int modulus)
+{
+    // In 64 bits: the difference of two ints near the ends of the range overflows an int.
+    const qint64 age = (qint64(newest) - target) % modulus;
+    return age < 0 ? age + modulus : age;
+}
+
 OutputTabWidget::OutputTabWidget(QWidget *parent)
     : QPlainTextEdit(parent)
 {
@@ -122,7 +134,11 @@ void OutputTabWidget::setLinkParser(ProjectExplorer::Project *project)
 int OutputTabWidget::appendLine(
     const QString &line, Utils::OutputFormat format, int sourceLineId, bool countsAsMatch)
 {
-    const int lineId = sourceLineId >= 0 ? sourceLineId : m_nextLineId++;
+    int lineId = sourceLineId;
+    if (lineId < 0) {
+        lineId = m_nextLineId;
+        m_nextLineId = nextLineId(m_nextLineId);
+    }
 
     m_formatter.appendMessage(displayText(line, m_maxLineLength) + "\n", format);
     // appendMessage's trailing newline advances the cursor into a new, still-empty block, so
@@ -164,18 +180,31 @@ void OutputTabWidget::reset()
 
 bool OutputTabWidget::scrollToLine(int lineId)
 {
-    // Line ids only ever increase down the document, so walk up from the end: a jump target
-    // is usually recent, and hitting a smaller id means the line has already been trimmed.
-    // Blocks without an id (userState() == -1, e.g. the trailing empty block) are skipped.
-    for (QTextBlock block = document()->lastBlock(); block.isValid(); block = block.previous()) {
-        const int state = block.userState();
-        if (state == lineId) {
-            setTextCursor(QTextCursor(block));
-            centerCursor();
-            return true;
-        }
-        if (state >= 0 && state < lineId)
-            break;
+    const auto show = [this](const QTextBlock &block) {
+        setTextCursor(QTextCursor(block));
+        centerCursor();
+        return true;
+    };
+
+    // In a tab numbering its own lines (All -- the only jump target), ids are consecutive,
+    // one block per line, wrapping at LineIdModulus. So the target is `age` blocks above the
+    // newest line, or already trimmed if it is older than the tab holds. Comparing ages
+    // rather than ids stays right when the ids wrapped in between.
+    const QTextBlock newest = document()->lastBlock().previous(); // last is the empty one
+    if (!newest.isValid() || newest.userState() < 0)
+        return false;
+    const qint64 age = lineIdAge(newest.userState(), lineId);
+    if (age > newest.blockNumber())
+        return false;
+    const QTextBlock candidate = document()->findBlockByNumber(int(newest.blockNumber() - age));
+    if (candidate.userState() == lineId)
+        return show(candidate);
+
+    // Not where consecutive ids put it (a tab given ids by another, say): look for it by
+    // equality alone, which assumes no ordering at all.
+    for (QTextBlock block = newest; block.isValid(); block = block.previous()) {
+        if (block.userState() == lineId)
+            return show(block);
     }
     return false;
 }

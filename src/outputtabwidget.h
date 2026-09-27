@@ -8,6 +8,8 @@
 #include <QPoint>
 #include <QTimer>
 
+#include <limits>
+
 QT_BEGIN_NAMESPACE
 class QWheelEvent;
 QT_END_NAMESPACE
@@ -18,6 +20,18 @@ class Project;
 
 namespace MultiFilterOutput {
 
+// Line ids (see OutputTabWidget) live in QTextBlock::userState(), an int where -1 means "no
+// id", so they cycle through [0, LineIdModulus) rather than growing until they overflow.
+constexpr int LineIdModulus = std::numeric_limits<int>::max();
+
+// The id after `id`, wrapping to 0 at `modulus`.
+MULTIFILTEROUTPUT_EXPORT int nextLineId(int id, int modulus = LineIdModulus);
+
+// How many lines before `newest` the line with id `target` was appended, assuming consecutive
+// ids that wrap at `modulus` -- i.e. (newest - target) mod modulus. A target "newer" than
+// `newest` therefore comes out as a huge age, which reads as long gone.
+MULTIFILTEROUTPUT_EXPORT qint64 lineIdAge(int newest, int target, int modulus = LineIdModulus);
+
 // A single output tab: owns a Utils::OutputFormatter that appends formatted, optionally
 // linkified lines to itself. Used by FilteredOutputPane both for the "All" tab and for each
 // enabled pattern's tab. A click that doesn't land on a linkified reference emits
@@ -27,7 +41,8 @@ namespace MultiFilterOutput {
 // Lines are identified by a line id rather than a block number: setMaximumBlockCount()
 // discards blocks off the front once the cap is hit, renumbering every block that remains,
 // whereas a line id is stored on the line's own block (QTextBlock::userState()) and so stays
-// attached to it -- and disappears with it -- however much is trimmed.
+// attached to it -- and disappears with it -- however much is trimmed. Ids wrap at
+// LineIdModulus instead of overflowing.
 class MULTIFILTEROUTPUT_EXPORT OutputTabWidget : public QPlainTextEdit
 {
     Q_OBJECT

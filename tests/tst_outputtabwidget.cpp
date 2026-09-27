@@ -23,6 +23,8 @@ private slots:
     void truncationShowsPlaceholdersLiterally();
     void truncationDoesNotLeakColorIntoLaterLines();
     void truncationNeverSplitsEscapeSequence();
+    void lineIdsWrapInsteadOfOverflowing();
+    void lineIdAgeAcrossTheWrap();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -223,6 +225,29 @@ void tst_OutputTabWidget::truncationNeverSplitsEscapeSequence()
     // The cut at 10 falls inside "\x1b[31m", which starts at index 7.
     tab.appendLine(QStringLiteral("abcdefg\x1b[31mhijklmnop"), Utils::StdOutFormat);
     QVERIFY2(lastLineText(tab).startsWith("abcdefg ..."), qPrintable(lastLineText(tab)));
+}
+
+// After 2^31 lines in one run an int id would overflow into negatives, which read as "no id";
+// ids cycle instead. (Shown with a small modulus -- the real one is INT_MAX.)
+void tst_OutputTabWidget::lineIdsWrapInsteadOfOverflowing()
+{
+    QCOMPARE(nextLineId(5, 100), 6);
+    QCOMPARE(nextLineId(98, 100), 99);
+    QCOMPARE(nextLineId(99, 100), 0);
+    QCOMPARE(nextLineId(LineIdModulus - 1), 0);
+}
+
+// scrollToLine() finds a line by how far back from the newest one it is; that distance must
+// stay right when the ids have wrapped in between.
+void tst_OutputTabWidget::lineIdAgeAcrossTheWrap()
+{
+    QCOMPARE(lineIdAge(10, 7, 100), 3);
+    QCOMPARE(lineIdAge(10, 10, 100), 0);
+    QCOMPARE(lineIdAge(2, 98, 100), 4);
+    QCOMPARE(lineIdAge(0, 99, 100), 1);
+    // Not appended yet (or from before a reset): far older than any tab holds.
+    QCOMPARE(lineIdAge(10, 12, 100), 98);
+    QCOMPARE(lineIdAge(1, LineIdModulus - 1), 2);
 }
 
 QTEST_MAIN(tst_OutputTabWidget)
