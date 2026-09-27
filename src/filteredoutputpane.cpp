@@ -12,6 +12,7 @@
 #include "tablabel.h"
 
 #include <coreplugin/icore.h>
+#include <coreplugin/messagemanager.h>
 
 #include <projectexplorer/project.h>
 #include <projectexplorer/runcontrol.h>
@@ -22,6 +23,8 @@
 #include <QLabel>
 #include <QTabBar>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 using namespace ProjectExplorer;
 
@@ -202,7 +205,12 @@ void FilteredOutputPane::updateTabLabel(const Pattern &pattern, OutputTabWidget 
     const int index = m_tabWidget->indexOf(tab);
     if (index == -1)
         return;
-    m_tabWidget->setTabText(index, tabLabel(pattern, count));
+    const auto entry = std::find_if(
+        m_patternTabs.cbegin(), m_patternTabs.cend(), [tab](const PatternTab &e) {
+            return e.tab == tab;
+        });
+    const bool tooSlow = entry != m_patternTabs.cend() && entry->breaker.isTripped();
+    m_tabWidget->setTabText(index, tabLabel(pattern, count, tooSlow));
     // Pattern::color is user-editable and persisted; this is where it becomes visible.
     if (pattern.color.isValid())
         m_tabWidget->tabBar()->setTabTextColor(index, pattern.color);
@@ -253,21 +261,43 @@ void FilteredOutputPane::processLine(const QString &line, Utils::OutputFormat fo
     const int allLine = m_allTab->appendLine(line, format);
 
     for (PatternTab &entry : m_patternTabs) {
-        if (entry.inContinuation) {
-            if (lineContinuesPattern(entry.pattern, line)) {
-                entry.tab->appendLine(line, format, allLine, /*countsAsMatch=*/false);
-                continue;
-            }
-            // This line breaks the continuation run; fall through and re-check it as an
-            // ordinary candidate match below, same as any other line.
-            entry.inContinuation = false;
-        }
-        if (lineMatches(entry.pattern, line)) {
-            entry.tab->appendLine(line, format, allLine);
-            entry.inContinuation = entry.pattern.groupContinuationLines
-                                    && !entry.pattern.continuationPattern.isEmpty();
-        }
+        if (entry.breaker.isTripped())
+            continue;
+        matchIntoTab(entry, line, format, allLine);
+        if (entry.breaker.isTripped())
+            reportTooSlow(entry);
     }
+}
+
+void FilteredOutputPane::matchIntoTab(
+    PatternTab &entry, const QString &line, Utils::OutputFormat format, int allLine)
+{
+    // Both regexes -- the main one and the continuation one -- go through the breaker; either
+    // can be the pathological one.
+    if (entry.inContinuation) {
+        if (entry.breaker.run([&] { return lineContinuesPattern(entry.pattern, line); })) {
+            entry.tab->appendLine(line, format, allLine, /*countsAsMatch=*/false);
+            return;
+        }
+        // This line breaks the continuation run; fall through and re-check it as an
+        // ordinary candidate match below, same as any other line.
+        entry.inContinuation = false;
+    }
+    if (entry.breaker.run([&] { return lineMatches(entry.pattern, line); })) {
+        entry.tab->appendLine(line, format, allLine);
+        entry.inContinuation = entry.pattern.groupContinuationLines
+                               && !entry.pattern.continuationPattern.isEmpty();
+    }
+}
+
+void FilteredOutputPane::reportTooSlow(const PatternTab &entry)
+{
+    updateTabLabel(entry.pattern, entry.tab, entry.tab->matchCount());
+    Core::MessageManager::writeSilently(
+        Tr::tr("MultiFilterOutput: stopped filtering \"%1\" for this run because matching it "
+               "repeatedly took too long. Simplify its regular expression -- nested "
+               "quantifiers such as (a+)+ are the usual cause.")
+            .arg(entry.pattern.name));
 }
 
 void FilteredOutputPane::clearContents()

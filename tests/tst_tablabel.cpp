@@ -12,6 +12,7 @@ private slots:
     void normalPatternShowsNameAndCount();
     void invertedPatternIsPrefixed();
     void zeroMatchesStillShowsCount();
+    void tooSlowPatternIsMarked();
 };
 
 void tst_TabLabel::normalPatternShowsNameAndCount()
@@ -35,6 +36,13 @@ void tst_TabLabel::zeroMatchesStillShowsCount()
     Pattern p;
     p.name = "Network";
     QCOMPARE(tabLabel(p, 0), QStringLiteral("Network (0)"));
+}
+
+void tst_TabLabel::tooSlowPatternIsMarked()
+{
+    Pattern p;
+    p.name = "Errors";
+    QCOMPARE(tabLabel(p, 12, /*tooSlow=*/true), QStringLiteral("Errors (12) - disabled: too slow"));
 }
 
 QTEST_GUILESS_MAIN(tst_TabLabel)

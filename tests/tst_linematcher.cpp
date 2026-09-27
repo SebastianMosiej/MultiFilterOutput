@@ -3,6 +3,10 @@
 
 #include <QtTest>
 
+#include <thread>
+
+using namespace std::chrono_literals;
+
 using namespace MultiFilterOutput;
 
 class tst_LineMatcher : public QObject
@@ -19,6 +23,14 @@ private slots:
     void continuationOffByDefault();
     void continuationMatchesLeadingWhitespace();
     void continuationInvalidRegexFailsSafe();
+    void catastrophicRegexStaysBounded_data();
+    void catastrophicRegexStaysBounded();
+    void breakerPassesResultsThroughWhileFast();
+    void breakerTripsAfterRepeatedSlowMatches();
+    void breakerForgivesOneOffStall();
+    void breakerResetRearms();
+    void regexCacheStaysWithinCapacity();
+    void regexCacheKeepsCaseVariantsApart();
 };
 
 void tst_LineMatcher::plainTextMatchCaseInsensitiveByDefault()
@@ -131,6 +143,129 @@ void tst_LineMatcher::continuationInvalidRegexFailsSafe()
     p.continuationPattern = "([unterminated";
 
     QVERIFY(!lineContinuesPattern(p, "anything at all"));
+}
+
+void tst_LineMatcher::catastrophicRegexStaysBounded_data()
+{
+    QTest::addColumn<QString>("patternText");
+    QTest::addColumn<QString>("line");
+    // Each of these would take ~2^n steps with naive backtracking (^(\d+)*$ on 40 digits:
+    // ~10^12); measured at 20-30 ms per line on Qt 6.10 / MSVC, where PCRE2's match limit
+    // makes QRegularExpression give up and report no match.
+    const auto repeat = [](const QString &s, int n) { return s.repeated(n); };
+    QTest::newRow("(a+)+$") << "(a+)+$" << repeat("a", 5000) + "!";
+    QTest::newRow("(a|aa)+$") << "(a|aa)+$" << repeat("a", 5000) + "!";
+    QTest::newRow("^(\\d+)*$") << "^(\\d+)*$" << repeat("1", 40) + "x";
+    QTest::newRow("^(\\w+\\s?)*$") << "^(\\w+\\s?)*$" << repeat("word ", 30) + "!";
+    QTest::newRow("^(a?){30}a{30}$") << "^(a?){30}a{30}$" << repeat("a", 30);
+}
+
+// Pins what S13's circuit breaker (SlowMatchBreaker) relies on: a catastrophic pattern costs
+// a bounded amount per line rather than hanging the GUI thread outright. The limit is
+// deliberately generous -- this guards against a Qt/PCRE2 build without a match limit, not
+// against a slow machine.
+void tst_LineMatcher::catastrophicRegexStaysBounded()
+{
+    QFETCH(QString, patternText);
+    QFETCH(QString, line);
+
+    Pattern p;
+    p.isRegex = true;
+    p.patternText = patternText;
+    lineMatches(p, "warm-up: compiles and caches the expression");
+
+    QElapsedTimer timer;
+    timer.start();
+    lineMatches(p, line);
+    const qint64 ms = timer.elapsed();
+    QVERIFY2(ms < 500, qPrintable(QString("took %1 ms").arg(ms)));
+}
+
+void tst_LineMatcher::breakerPassesResultsThroughWhileFast()
+{
+    SlowMatchBreaker breaker;
+    for (int i = 0; i < 100; ++i) {
+        QCOMPARE(breaker.run([] { return true; }), true);
+        QCOMPARE(breaker.run([] { return false; }), false);
+    }
+    QVERIFY(!breaker.isTripped());
+}
+
+// A match that is slow every time is a genuinely pathological pattern: after maxStrikes of
+// them the breaker trips, and from then on the match isn't even attempted.
+void tst_LineMatcher::breakerTripsAfterRepeatedSlowMatches()
+{
+    SlowMatchBreaker breaker(10ms, 3);
+    int calls = 0;
+    const auto slowMatch = [&] {
+        ++calls;
+        std::this_thread::sleep_for(15ms);
+        return true;
+    };
+
+    QCOMPARE(breaker.run(slowMatch), true);
+    QCOMPARE(breaker.run(slowMatch), true);
+    QVERIFY(!breaker.isTripped());
+    breaker.run(slowMatch);
+    QVERIFY(breaker.isTripped());
+
+    const int callsWhenTripped = calls;
+    QCOMPARE(breaker.run(slowMatch), false);
+    QCOMPARE(calls, callsWhenTripped);
+}
+
+// One slow match followed by a fast repeat is the OS stalling us, not the pattern.
+void tst_LineMatcher::breakerForgivesOneOffStall()
+{
+    SlowMatchBreaker breaker(10ms, 1);
+    bool stalled = false;
+    const auto stallOnce = [&] {
+        if (!stalled) {
+            stalled = true;
+            std::this_thread::sleep_for(15ms);
+        }
+        return true;
+    };
+
+    QCOMPARE(breaker.run(stallOnce), true);
+    QVERIFY(!breaker.isTripped());
+}
+
+// A new run gets a fresh chance: the output (and so what the pattern chokes on) may differ.
+void tst_LineMatcher::breakerResetRearms()
+{
+    SlowMatchBreaker breaker(10ms, 1);
+    breaker.run([] {
+        std::this_thread::sleep_for(15ms);
+        return true;
+    });
+    QVERIFY(breaker.isTripped());
+
+    breaker.reset();
+    QVERIFY(!breaker.isTripped());
+    QCOMPARE(breaker.run([] { return true; }), true);
+}
+
+// Every edit of a pattern's text in the settings page is a new cache key once matched; the
+// cache must not keep all of them for the rest of the session -- and must keep compiling
+// correctly after it has had to make room.
+void tst_LineMatcher::regexCacheStaysWithinCapacity()
+{
+    RegexCache cache(4);
+    for (int i = 0; i < 10; ++i) {
+        const QString text = QStringLiteral("pattern%1").arg(i);
+        QVERIFY(cache.get(text, true).match(text).hasMatch());
+        QVERIFY(cache.size() <= 4);
+    }
+    QVERIFY(cache.get("pattern0", true).match("pattern0").hasMatch());
+}
+
+void tst_LineMatcher::regexCacheKeepsCaseVariantsApart()
+{
+    RegexCache cache;
+    QVERIFY(cache.get("abc", /*caseSensitive=*/false).match("ABC").hasMatch());
+    QVERIFY(!cache.get("abc", /*caseSensitive=*/true).match("ABC").hasMatch());
+    QCOMPARE(cache.size(), 2);
 }
 
 QTEST_GUILESS_MAIN(tst_LineMatcher)
