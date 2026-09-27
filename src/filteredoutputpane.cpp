@@ -181,10 +181,7 @@ void FilteredOutputPane::updateTabLabel(const Pattern &pattern, OutputTabWidget 
     const int index = m_tabWidget->indexOf(tab);
     if (index == -1)
         return;
-    m_tabWidget->setTabText(index, tabLabel(pattern, count));
-    // Pattern::color is user-editable and persisted; this is where it becomes visible.
-    if (pattern.color.isValid())
-        m_tabWidget->tabBar()->setTabTextColor(index, pattern.color);
+    applyTabLabel(m_tabWidget->tabBar(), index, pattern, count);
 }
 
 void FilteredOutputPane::onJumpRequested(int sourceBlockNumber)
