@@ -97,6 +97,24 @@ public:
     // own block, so marks survive trimming like line ids do.
     void markLastLineAsMatch();
     bool hasMatchStops() const;
+    // For re-matching the tab's lines against changed patterns: forget every match stop, then
+    // mark lines again by line id (a no-op for an id no longer in the tab).
+    void clearMatchStops();
+    void markLineAsMatch(int lineId);
+
+    // A note the pane itself added (e.g. "... lines dropped"), not a line of the app's output.
+    void markLastLineAsNotice();
+
+    // The lines the tab still holds, oldest first, as shown -- for replaying All through
+    // changed patterns.
+    struct Line
+    {
+        QString text;
+        Utils::OutputFormat format;
+        int lineId;
+        bool isNotice;
+    };
+    QList<Line> lines() const;
 
     enum class Direction { Forward, Backward };
     // Moves the cursor to the next/previous marked line after/before the current one,
@@ -144,6 +162,10 @@ signals:
     void fontZoomChanged(qreal zoom);
 
 protected:
+    // The block holding the line with this id, or an invalid block if the tab no longer
+    // holds it.
+    QTextBlock blockForLine(int lineId) const;
+
     // Applies the current filter to a line just appended.
     void filterAppendedLine(QTextBlock block);
 

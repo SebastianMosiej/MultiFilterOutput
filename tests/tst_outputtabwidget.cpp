@@ -41,6 +41,9 @@ private slots:
     void invertedRegexCaseSensitiveFilter();
     void filterShowsContextLines();
     void filterAppliesToLinesAppendedLater();
+    void linesReportTextFormatIdAndNotices();
+    void linesOnlyReportWhatTheTabStillHolds();
+    void matchStopsCanBeReassignedByLineId();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -450,6 +453,61 @@ void tst_OutputTabWidget::filterAppliesToLinesAppendedLater()
     appendAll(tab, {"x", "y", "MATCH 1", "after", "z", "MATCH 2"});
 
     QCOMPARE(visibleLines(tab), (QStringList{"y", "MATCH 1", "after", "z", "MATCH 2"}));
+}
+
+// Replaying All through changed patterns needs each line back as it was appended: text,
+// stdout/stderr, its line id, and whether it was the pane's own notice rather than output.
+void tst_OutputTabWidget::linesReportTextFormatIdAndNotices()
+{
+    OutputTabWidget tab;
+    tab.appendLine("out", Utils::StdOutFormat);
+    tab.appendLine("err", Utils::StdErrFormat);
+    tab.appendLine("[3 lines dropped]", Utils::ErrorMessageFormat);
+    tab.markLastLineAsNotice();
+
+    const QList<OutputTabWidget::Line> lines = tab.lines();
+
+    QCOMPARE(lines.size(), 3);
+    QCOMPARE(lines.at(0).text, QStringLiteral("out"));
+    QCOMPARE(lines.at(0).format, Utils::StdOutFormat);
+    QCOMPARE(lines.at(0).lineId, 0);
+    QVERIFY(!lines.at(0).isNotice);
+    QCOMPARE(lines.at(1).format, Utils::StdErrFormat);
+    QCOMPARE(lines.at(1).lineId, 1);
+    QCOMPARE(lines.at(2).format, Utils::ErrorMessageFormat);
+    QVERIFY(lines.at(2).isNotice);
+}
+
+void tst_OutputTabWidget::linesOnlyReportWhatTheTabStillHolds()
+{
+    OutputTabWidget tab;
+    tab.setMaximumBlockCount(4);
+    for (int i = 0; i < 10; ++i)
+        tab.appendLine(QStringLiteral("line %1").arg(i), Utils::StdOutFormat);
+
+    const QList<OutputTabWidget::Line> lines = tab.lines();
+
+    QCOMPARE(lines.size(), 3); // the cap's 4 blocks include the trailing empty one
+    QCOMPARE(lines.first().text, QStringLiteral("line 7"));
+    QCOMPARE(lines.first().lineId, 7);
+    QCOMPARE(lines.last().text, QStringLiteral("line 9"));
+}
+
+// After a replay the match stops must follow the new patterns, not the old ones.
+void tst_OutputTabWidget::matchStopsCanBeReassignedByLineId()
+{
+    OutputTabWidget tab;
+    appendMarked(tab, "old match");     // id 0
+    tab.appendLine("new match", Utils::StdOutFormat); // id 1
+
+    tab.clearMatchStops();
+    QVERIFY(!tab.hasMatchStops());
+    tab.markLineAsMatch(1);
+    tab.markLineAsMatch(42); // not in the tab: ignored
+
+    tab.moveCursor(QTextCursor::End);
+    QCOMPARE(tab.goToMatch(OutputTabWidget::Direction::Backward), 1);
+    QCOMPARE(tab.goToMatch(OutputTabWidget::Direction::Backward), 1); // the only stop
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

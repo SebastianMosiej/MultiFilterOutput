@@ -68,6 +68,25 @@ QString displayText(const QString &line, int maxLength)
         .arg(kept, QString::number(line.size() - cut)); // not chained: see tabLabel()
 }
 
+
+// Block format property marking a line as a match stop (see markLastLineAsMatch()).
+constexpr int MatchStopProperty = QTextFormat::UserProperty + 1;
+// The line's Utils::OutputFormat, and whether it is the pane's own notice (see lines()).
+constexpr int OutputFormatProperty = QTextFormat::UserProperty + 2;
+constexpr int NoticeProperty = QTextFormat::UserProperty + 3;
+
+void setBlockProperty(const QTextBlock &block, int property, const QVariant &value)
+{
+    QTextBlockFormat format = block.blockFormat();
+    format.setProperty(property, value);
+    QTextCursor(block).setBlockFormat(format);
+}
+
+bool isMatchStop(const QTextBlock &block)
+{
+    return block.blockFormat().boolProperty(MatchStopProperty);
+}
+
 } // namespace
 
 int nextLineId(int id, int modulus)
@@ -157,6 +176,7 @@ int OutputTabWidget::appendLine(
     // free to carry the line id -- see the class comment.
     QTextBlock block = document()->lastBlock().previous();
     block.setUserState(lineId);
+    setBlockProperty(block, OutputFormatProperty, int(format));
     if (!m_filter.text.isEmpty())
         filterAppendedLine(block);
 
@@ -195,33 +215,37 @@ void OutputTabWidget::reset()
 
 bool OutputTabWidget::scrollToLine(int lineId)
 {
-    const auto show = [this](const QTextBlock &block) {
-        setTextCursor(QTextCursor(block));
-        centerCursor();
-        return true;
-    };
+    const QTextBlock block = blockForLine(lineId);
+    if (!block.isValid())
+        return false;
+    setTextCursor(QTextCursor(block));
+    centerCursor();
+    return true;
+}
 
+QTextBlock OutputTabWidget::blockForLine(int lineId) const
+{
     // In a tab numbering its own lines (All -- the only jump target), ids are consecutive,
     // one block per line, wrapping at LineIdModulus. So the target is `age` blocks above the
     // newest line, or already trimmed if it is older than the tab holds. Comparing ages
     // rather than ids stays right when the ids wrapped in between.
     const QTextBlock newest = document()->lastBlock().previous(); // last is the empty one
     if (!newest.isValid() || newest.userState() < 0)
-        return false;
+        return {};
     const qint64 age = lineIdAge(newest.userState(), lineId);
     if (age > newest.blockNumber())
-        return false;
+        return {};
     const QTextBlock candidate = document()->findBlockByNumber(int(newest.blockNumber() - age));
     if (candidate.userState() == lineId)
-        return show(candidate);
+        return candidate;
 
     // Not where consecutive ids put it (a tab given ids by another, say): look for it by
     // equality alone, which assumes no ordering at all.
     for (QTextBlock block = newest; block.isValid(); block = block.previous()) {
         if (block.userState() == lineId)
-            return show(block);
+            return block;
     }
-    return false;
+    return {};
 }
 
 void OutputTabWidget::setBaseFont(const QFont &newFont)
@@ -240,28 +264,53 @@ qreal OutputTabWidget::fontZoom() const
     return font().pointSizeF() - m_baseFontSize;
 }
 
-namespace {
-
-// Block format property marking a line as a match stop (see markLastLineAsMatch()).
-constexpr int MatchStopProperty = QTextFormat::UserProperty + 1;
-
-bool isMatchStop(const QTextBlock &block)
-{
-    return block.blockFormat().boolProperty(MatchStopProperty);
-}
-
-} // namespace
-
 void OutputTabWidget::markLastLineAsMatch()
 {
     // The last block is the empty one appendLine()'s newline opened; the line is before it.
     const QTextBlock block = document()->lastBlock().previous();
     if (!block.isValid())
         return;
-    QTextBlockFormat format = block.blockFormat();
-    format.setProperty(MatchStopProperty, true);
-    QTextCursor(block).setBlockFormat(format);
+    setBlockProperty(block, MatchStopProperty, true);
     ++m_matchStops;
+}
+
+void OutputTabWidget::clearMatchStops()
+{
+    for (QTextBlock block = document()->firstBlock(); block.isValid(); block = block.next()) {
+        if (isMatchStop(block))
+            setBlockProperty(block, MatchStopProperty, false);
+    }
+    m_matchStops = 0;
+}
+
+void OutputTabWidget::markLineAsMatch(int lineId)
+{
+    const QTextBlock block = blockForLine(lineId);
+    if (!block.isValid() || isMatchStop(block))
+        return;
+    setBlockProperty(block, MatchStopProperty, true);
+    ++m_matchStops;
+}
+
+void OutputTabWidget::markLastLineAsNotice()
+{
+    const QTextBlock block = document()->lastBlock().previous();
+    if (block.isValid())
+        setBlockProperty(block, NoticeProperty, true);
+}
+
+QList<OutputTabWidget::Line> OutputTabWidget::lines() const
+{
+    QList<Line> result;
+    for (QTextBlock b = document()->firstBlock(); b != document()->lastBlock(); b = b.next()) {
+        const QTextBlockFormat format = b.blockFormat();
+        result.append(
+            {b.text(),
+             Utils::OutputFormat(format.intProperty(OutputFormatProperty)),
+             b.userState(),
+             format.boolProperty(NoticeProperty)});
+    }
+    return result;
 }
 
 bool OutputTabWidget::hasMatchStops() const
