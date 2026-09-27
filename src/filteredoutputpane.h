@@ -71,6 +71,9 @@ private:
     // Called once, when entry's pattern trips its slow-match breaker in m_router: relabels
     // the tab and says why in General Messages.
     void reportTooSlow(const PatternTab &entry);
+    // Called by m_lineQueue, in order, where it dropped backlog to bound memory: says so in
+    // every tab.
+    void reportDiscarded(int lines);
 
     RunTracker *m_runTracker;
     LineQueue *m_lineQueue = nullptr;

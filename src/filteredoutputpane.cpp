@@ -53,6 +53,8 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
         [this](const QString &line, Utils::OutputFormat format) { processLine(line, format); },
         std::chrono::milliseconds(10),
         this);
+    m_lineQueue->setOverflowHandling(
+        LineQueue::DefaultMaxQueuedCharacters, [this](int discarded) { reportDiscarded(discarded); });
 
     RunTracker *tracker = m_runTracker;
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);
@@ -293,6 +295,22 @@ void FilteredOutputPane::processLine(const QString &line, Utils::OutputFormat fo
     }
     for (const int index : result.newlyTooSlow)
         reportTooSlow(m_patternTabs.at(index));
+}
+
+void FilteredOutputPane::reportDiscarded(int lines)
+{
+    if (!m_allTab)
+        return;
+    // In every tab, not just All: any of the dropped lines might have matched a pattern.
+    // Not counted as a match anywhere.
+    const QString notice = Tr::tr("[MultiFilterOutput: %1 lines of output were dropped here -- "
+                                  "they arrived faster than they could be filtered.]")
+                               .arg(lines);
+    const int allLine = m_allTab->appendLine(notice, Utils::ErrorMessageFormat);
+    for (const PatternTab &entry : std::as_const(m_patternTabs))
+        entry.tab->appendLine(notice, Utils::ErrorMessageFormat, allLine, /*countsAsMatch=*/false);
+    // A continuation run can't be continued across a gap: what follows didn't follow the match.
+    m_router.resetContinuations();
 }
 
 void FilteredOutputPane::reportTooSlow(const PatternTab &entry)
