@@ -19,6 +19,8 @@ private slots:
     void continuationOffByDefault();
     void continuationMatchesLeadingWhitespace();
     void continuationInvalidRegexFailsSafe();
+    void catastrophicRegexStaysBounded_data();
+    void catastrophicRegexStaysBounded();
 };
 
 void tst_LineMatcher::plainTextMatchCaseInsensitiveByDefault()
@@ -131,6 +133,42 @@ void tst_LineMatcher::continuationInvalidRegexFailsSafe()
     p.continuationPattern = "([unterminated";
 
     QVERIFY(!lineContinuesPattern(p, "anything at all"));
+}
+
+void tst_LineMatcher::catastrophicRegexStaysBounded_data()
+{
+    QTest::addColumn<QString>("patternText");
+    QTest::addColumn<QString>("line");
+    // Each of these would take ~2^n steps with naive backtracking (^(\d+)*$ on 40 digits:
+    // ~10^12); measured at 20-30 ms per line on Qt 6.10 / MSVC, where PCRE2's match limit
+    // makes QRegularExpression give up and report no match.
+    const auto repeat = [](const QString &s, int n) { return s.repeated(n); };
+    QTest::newRow("(a+)+$") << "(a+)+$" << repeat("a", 5000) + "!";
+    QTest::newRow("(a|aa)+$") << "(a|aa)+$" << repeat("a", 5000) + "!";
+    QTest::newRow("^(\\d+)*$") << "^(\\d+)*$" << repeat("1", 40) + "x";
+    QTest::newRow("^(\\w+\\s?)*$") << "^(\\w+\\s?)*$" << repeat("word ", 30) + "!";
+    QTest::newRow("^(a?){30}a{30}$") << "^(a?){30}a{30}$" << repeat("a", 30);
+}
+
+// Pins what S13's circuit breaker (SlowMatchBreaker) relies on: a catastrophic pattern costs
+// a bounded amount per line rather than hanging the GUI thread outright. The limit is
+// deliberately generous -- this guards against a Qt/PCRE2 build without a match limit, not
+// against a slow machine.
+void tst_LineMatcher::catastrophicRegexStaysBounded()
+{
+    QFETCH(QString, patternText);
+    QFETCH(QString, line);
+
+    Pattern p;
+    p.isRegex = true;
+    p.patternText = patternText;
+    lineMatches(p, "warm-up: compiles and caches the expression");
+
+    QElapsedTimer timer;
+    timer.start();
+    lineMatches(p, line);
+    const qint64 ms = timer.elapsed();
+    QVERIFY2(ms < 500, qPrintable(QString("took %1 ms").arg(ms)));
 }
 
 QTEST_GUILESS_MAIN(tst_LineMatcher)
