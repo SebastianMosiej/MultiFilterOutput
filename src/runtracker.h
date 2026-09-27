@@ -21,6 +21,18 @@ class MULTIFILTEROUTPUT_EXPORT RunTracker : public QObject
 public:
     explicit RunTracker(QObject *parent = nullptr);
 
+    // Starts following Qt Creator's runs: tracks every run already in progress, then each
+    // one ProjectExplorerPlugin reports as started or stopped. Separate from the constructor
+    // so that a tracker can exist -- and be tested -- without a running ProjectExplorer.
+    void attachToProjectExplorer();
+
+    // What ProjectExplorerPlugin::runControlStarted / runControlStoped feed (see
+    // attachToProjectExplorer()); public so tests can drive the tracker directly.
+    // A started run becomes the active one. A stopped run stops being listened to but stays
+    // active (its tabs stay up) until another run starts or it is destroyed.
+    void trackRunControl(ProjectExplorer::RunControl *runControl);
+    void untrackRunControl(ProjectExplorer::RunControl *runControl);
+
     // The run whose output this tracker is currently following, or nullptr.
     //
     // Qt Creator 20.0.1 exposes no public "this run's Application Output tab is the one
@@ -42,8 +54,6 @@ signals:
     void activeRunLineReceived(const QString &line, Utils::OutputFormat format);
 
 private:
-    void trackRunControl(ProjectExplorer::RunControl *runControl);
-    void untrackRunControl(ProjectExplorer::RunControl *runControl);
     void handleRunControlDestroyed(ProjectExplorer::RunControl *runControl);
     void activateRunControl(ProjectExplorer::RunControl *runControl);
 

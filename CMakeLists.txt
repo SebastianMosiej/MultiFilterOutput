@@ -121,6 +121,10 @@ if(WITH_TESTS)
     SOURCES tests/tst_linerouter.cpp
     DEPENDS MultiFilterOutput
   )
+  add_qtc_test(tst_runtracker
+    SOURCES tests/tst_runtracker.cpp
+    DEPENDS MultiFilterOutput QtCreator::ProjectExplorer
+  )
 
   # add_qtc_test() bakes a fixed PATH into each test's ENVIRONMENT property (see
   # finalize_test_setup() in QtCreatorAPIInternal.cmake). That PATH covers this project's
@@ -147,6 +151,7 @@ if(WITH_TESTS)
       tst_outputtabwidget
       tst_linequeue
       tst_linerouter
+      tst_runtracker
       PROPERTIES ENVIRONMENT_MODIFICATION "${QtCreatorPathModification}"
     )
   endif()

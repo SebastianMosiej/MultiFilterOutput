@@ -41,6 +41,7 @@ void MultiFilterOutputPlugin::initialize()
     ProjectExplorer::RunConfiguration::registerAspect<FilterSetAspect>();
 
     m_runTracker = new RunTracker;
+    m_runTracker->attachToProjectExplorer();
     m_outputPane = new FilteredOutputPane(m_runTracker);
 }
 

@@ -9,6 +9,9 @@ namespace MultiFilterOutput {
 
 RunTracker::RunTracker(QObject *parent)
     : QObject(parent)
+{}
+
+void RunTracker::attachToProjectExplorer()
 {
     for (RunControl *rc : ProjectExplorerPlugin::allRunControls())
         trackRunControl(rc);
