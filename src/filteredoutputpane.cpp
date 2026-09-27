@@ -121,12 +121,10 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     const auto *filterData = activeRunControl->aspectData<FilterSetAspect>();
     const QStringList enabledIds = filterData ? filterData->value.toStringList() : QStringList();
 
-    for (const QString &id : enabledIds) {
-        const auto stored = patternLibrary().patternById(id);
-        if (!stored)
-            continue; // pattern deleted since selection was saved -- skip silently
-        const Pattern pattern = *stored;
-
+    // Library order, not enabledIds order: the latter is just the order the boxes were
+    // ticked in, while the library's is the one the user deliberately arranges. Patterns
+    // deleted since the selection was saved are skipped silently.
+    for (const Pattern &pattern : patternLibrary().patternsWithIds(enabledIds)) {
         auto *tab = new OutputTabWidget(m_tabWidget);
         tab->setLinkParser(project);
         tab->setFontZoom(m_fontZoom);

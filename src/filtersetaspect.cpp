@@ -43,6 +43,16 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
             m_enabledPatternIds.append(pattern.id);
     }
 
+    // Forget patterns as they are deleted, so their ids don't linger in this run
+    // configuration's selection -- and on disk -- forever. Only actual deletions count (see
+    // PatternLibrary::patternsRemoved()); an id the library merely doesn't know is kept.
+    // patternsRemoved() precedes the patternsChanged() for the same change, so the config
+    // widget's checkbox rebuild below already sees the pruned selection.
+    connect(&patternLibrary(), &PatternLibrary::patternsRemoved, this, [this](const QStringList &ids) {
+        for (const QString &id : ids)
+            m_enabledPatternIds.removeAll(id);
+    });
+
     // The Run Settings page renders each RunConfiguration aspect via
     // createConfigWidget(), which only returns non-null once a creator is set here --
     // addToLayoutImpl() is for the generic AspectContainer::layouter() path (e.g. Options

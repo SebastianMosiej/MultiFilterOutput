@@ -10,6 +10,8 @@
 #include "runtracker.h"
 
 #include <coreplugin/dialogs/ioptionspage.h>
+#include <coreplugin/icore.h>
+#include <coreplugin/messagemanager.h>
 
 #include <projectexplorer/runconfiguration.h>
 
@@ -30,7 +32,10 @@ void MultiFilterOutputPlugin::initialize()
         ":/multifilteroutput/images/MultiFilterOutput_24.png");
 
     m_settingsPage = new PatternLibrarySettingsPage;
-    patternLibrary().load();
+    // General Messages rather than a debug log: these need the user to look at the Pattern
+    // Library, and the log is not somewhere they would ever see them.
+    for (const QString &problem : patternLibrary().load(Core::ICore::settings()))
+        Core::MessageManager::writeSilently(Tr::tr("MultiFilterOutput: %1").arg(problem));
     outputPaneSettings().load();
 
     ProjectExplorer::RunConfiguration::registerAspect<FilterSetAspect>();
@@ -41,6 +46,8 @@ void MultiFilterOutputPlugin::initialize()
 
 ExtensionSystem::IPlugin::ShutdownFlag MultiFilterOutputPlugin::aboutToShutdown()
 {
+    // Every change made through PatternLibrary's mutators is already on disk; this is for the
+    // repairs load() itself may have made (see validatePatterns()), which aren't a mutation.
     patternLibrary().save();
     return SynchronousShutdown;
 }
