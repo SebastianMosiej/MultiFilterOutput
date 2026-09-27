@@ -30,6 +30,10 @@ private slots:
     void removeReportsRemovedId();
     void setPatternsReportsDroppedIds();
     void noRemovalReportsNothing();
+    void saveStampsSchemaVersion();
+    void unversionedSettingsMigrateLegacyGray();
+    void versionedSettingsKeepGray();
+    void newerSchemaVersionIsReported();
 };
 
 namespace {
@@ -319,6 +323,88 @@ void tst_PatternLibrary::noRemovalReportsNothing()
     lib.remove("no-such-id");
 
     QCOMPARE(spy.size(), 0);
+}
+
+// Writes one pattern the way a given schema version stored it: `schemaVersion` < 0 means no
+// SchemaVersion key at all, like every release before the key existed.
+static void writeRawPattern(
+    Utils::QtcSettings &settings, int schemaVersion, const QString &id, const QColor &color)
+{
+    settings.beginGroup("MultiFilterOutput");
+    if (schemaVersion >= 0)
+        settings.setValue("SchemaVersion", schemaVersion);
+    settings.beginWriteArray("patterns", 1);
+    settings.setArrayIndex(0);
+    settings.setValue("id", id);
+    settings.setValue("name", "Legacy");
+    settings.setValue("patternText", "x");
+    settings.setValue("color", color);
+    settings.endArray();
+    settings.endGroup();
+}
+
+static QVariant rawSchemaVersion(Utils::QtcSettings &settings)
+{
+    settings.beginGroup("MultiFilterOutput");
+    const QVariant version = settings.value("SchemaVersion");
+    settings.endGroup();
+    return version;
+}
+
+void tst_PatternLibrary::saveStampsSchemaVersion()
+{
+    QTemporaryDir dir;
+    Utils::QtcSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
+    PatternLibrary lib;
+    lib.load(&settings);
+
+    lib.addOrUpdate(makePattern("id-1", "A", "a"));
+
+    QCOMPARE(rawSchemaVersion(settings).toInt(), 1);
+}
+
+// Releases before the SchemaVersion key stored QColor(Qt::gray) for every pattern nobody had
+// colored; that still has to come back as "no tint".
+void tst_PatternLibrary::unversionedSettingsMigrateLegacyGray()
+{
+    QTemporaryDir dir;
+    Utils::QtcSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
+    writeRawPattern(settings, -1, "id-1", QColor(Qt::gray));
+
+    PatternLibrary lib;
+    lib.load(&settings);
+
+    QCOMPARE(lib.patterns().size(), 1);
+    QVERIFY(!lib.patterns().first().color.isValid());
+}
+
+// Once the settings say which format they are in, gray is just a color the user chose.
+void tst_PatternLibrary::versionedSettingsKeepGray()
+{
+    QTemporaryDir dir;
+    Utils::QtcSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
+    writeRawPattern(settings, 1, "id-1", QColor(Qt::gray));
+
+    PatternLibrary lib;
+    lib.load(&settings);
+
+    QCOMPARE(lib.patterns().first().color, QColor(Qt::gray));
+}
+
+// Saving from an older build can't preserve what a newer one added; the user should know
+// before that happens.
+void tst_PatternLibrary::newerSchemaVersionIsReported()
+{
+    QTemporaryDir dir;
+    Utils::QtcSettings settings(dir.filePath("settings.ini"), QSettings::IniFormat);
+    writeRawPattern(settings, 99, "id-1", QColor(Qt::red));
+
+    PatternLibrary lib;
+    const QStringList problems = lib.load(&settings);
+
+    QCOMPARE(problems.size(), 1);
+    QVERIFY(problems.first().contains("99"));
+    QCOMPARE(lib.patterns().size(), 1);
 }
 
 QTEST_GUILESS_MAIN(tst_PatternLibrary)

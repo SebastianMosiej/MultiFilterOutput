@@ -13,6 +13,7 @@ private slots:
     void createNewGeneratesUniqueIds();
     void continuationFieldsDefaultAndRoundTrip();
     void isDefaultDefaultsFalseAndRoundTrips();
+    void grayRoundTripsLikeAnyOtherColor();
 };
 
 void tst_Pattern::roundTripsThroughMap()
@@ -69,6 +70,15 @@ void tst_Pattern::createNewGeneratesUniqueIds()
     const Pattern b = Pattern::createNew();
     QVERIFY(!a.id.isEmpty());
     QVERIFY(a.id != b.id);
+}
+
+// The legacy "gray means no tint" migration belongs to loading old settings (see
+// PatternLibrary::load()), not to fromMap(): a gray the user picks on purpose must survive.
+void tst_Pattern::grayRoundTripsLikeAnyOtherColor()
+{
+    Pattern p;
+    p.color = QColor(Qt::gray);
+    QCOMPARE(Pattern::fromMap(p.toMap()).color, QColor(Qt::gray));
 }
 
 QTEST_GUILESS_MAIN(tst_Pattern)

@@ -85,6 +85,7 @@ QStringList PatternLibrary::load(Utils::QtcSettings *settings)
     m_settings = settings;
 
     settings->beginGroup(Constants::SETTINGS_GROUP);
+    const int schemaVersion = settings->value(Constants::SETTINGS_SCHEMA_VERSION_KEY, 0).toInt();
 
     const int count = settings->beginReadArray("patterns");
     for (int i = 0; i < count; ++i) {
@@ -111,7 +112,26 @@ QStringList PatternLibrary::load(Utils::QtcSettings *settings)
 
     settings->endGroup();
 
-    const QStringList problems = validatePatterns(m_patterns);
+    QStringList problems;
+    if (schemaVersion > Constants::SETTINGS_SCHEMA_VERSION) {
+        problems << Tr::tr("The Pattern Library settings were written by a newer version of "
+                           "MultiFilterOutput (settings format %1; this version understands up to "
+                           "%2). Anything that version added will be lost the next time the "
+                           "Pattern Library is saved.")
+                        .arg(schemaVersion)
+                        .arg(Constants::SETTINGS_SCHEMA_VERSION);
+    }
+    // Migrations, oldest first. Each one runs only for data older than the format it fixes;
+    // the next save() writes the current version, so it never runs twice.
+    if (schemaVersion < 1) {
+        // Before version 1 a never-colored pattern was stored as QColor(Qt::gray), not as
+        // "no color" -- indistinguishable from a deliberate gray, but only possible then.
+        for (Pattern &p : m_patterns) {
+            if (p.color == QColor(Qt::gray))
+                p.color = QColor();
+        }
+    }
+    problems += validatePatterns(m_patterns);
 
     emit patternsChanged();
     return problems;
@@ -123,6 +143,7 @@ void PatternLibrary::save() const
     if (!settings)
         return;
     settings->beginGroup(Constants::SETTINGS_GROUP);
+    settings->setValue(Constants::SETTINGS_SCHEMA_VERSION_KEY, Constants::SETTINGS_SCHEMA_VERSION);
 
     settings->beginWriteArray("patterns", int(m_patterns.size()));
     for (int i = 0; i < m_patterns.size(); ++i) {
