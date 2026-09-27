@@ -13,6 +13,8 @@ private slots:
     void invertedPatternIsPrefixed();
     void zeroMatchesStillShowsCount();
     void tooSlowPatternIsMarked();
+    void runLabelShowsKnownPid();
+    void runLabelOmitsUnknownPid();
 };
 
 void tst_TabLabel::normalPatternShowsNameAndCount()
@@ -43,6 +45,18 @@ void tst_TabLabel::tooSlowPatternIsMarked()
     Pattern p;
     p.name = "Errors";
     QCOMPARE(tabLabel(p, 12, /*tooSlow=*/true), QStringLiteral("Errors (12) - disabled: too slow"));
+}
+
+void tst_TabLabel::runLabelShowsKnownPid()
+{
+    QCOMPARE(runLabel("MyApp", 4242), QStringLiteral("Filtering: MyApp (pid 4242)"));
+}
+
+// Debugger, remote-device and Android/iOS runs report started before (or without ever)
+// knowing their pid; "pid 0" would be misleading.
+void tst_TabLabel::runLabelOmitsUnknownPid()
+{
+    QCOMPARE(runLabel("MyApp", 0), QStringLiteral("Filtering: MyApp"));
 }
 
 QTEST_GUILESS_MAIN(tst_TabLabel)

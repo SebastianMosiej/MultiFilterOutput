@@ -58,6 +58,9 @@ private:
     // (re)created, and re-broadcast to every other tab (and persisted) whenever any one tab's
     // own wheelEvent() changes it.
     void onTabZoomChanged(qreal zoom);
+    // Re-points m_pidConnection at the newly active run, then refreshes the toolbar label.
+    void watchRunLabel(ProjectExplorer::RunControl *activeRunControl);
+    void updateRunLabel();
 
     struct PatternTab
     {
@@ -88,6 +91,8 @@ private:
     OutputTabWidget *m_allTab = nullptr;
     QList<PatternTab> m_patternTabs;
     QLabel *m_runLabel = nullptr;
+    // The active run's applicationProcessHandleChanged -> updateRunLabel() connection.
+    QMetaObject::Connection m_pidConnection;
     qreal m_fontZoom = 0;
     // Set whenever a new run becomes active; cleared the moment this pane pops itself for
     // that run's first line of output (see onLineReceived()) -- so at most one pop per run.

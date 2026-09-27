@@ -56,6 +56,7 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
 
     RunTracker *tracker = m_runTracker;
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);
+    connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::watchRunLabel);
     connect(tracker, &RunTracker::activeRunLineReceived, this, &FilteredOutputPane::onLineReceived);
 
     // One limit for every tab, changed live from the Pattern Library settings page.
@@ -95,9 +96,40 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
 
 QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
 {
-    if (!m_runLabel)
-        const_cast<FilteredOutputPane *>(this)->m_runLabel = new QLabel(Tr::tr("No active run"));
+    if (!m_runLabel) {
+        auto *self = const_cast<FilteredOutputPane *>(this);
+        self->m_runLabel = new QLabel;
+        self->updateRunLabel();
+    }
     return {m_runLabel};
+}
+
+void FilteredOutputPane::watchRunLabel(RunControl *activeRunControl)
+{
+    // A run can report itself started before its pid is known -- the debugger, remote-device
+    // and Android/iOS runners all do -- so follow the pid as it arrives (and, on stop, as it
+    // is cleared) instead of reading it once when the run becomes active.
+    disconnect(m_pidConnection);
+    if (activeRunControl) {
+        m_pidConnection = connect(
+            activeRunControl,
+            &RunControl::applicationProcessHandleChanged,
+            this,
+            &FilteredOutputPane::updateRunLabel);
+    }
+    updateRunLabel();
+}
+
+void FilteredOutputPane::updateRunLabel()
+{
+    if (!m_runLabel)
+        return;
+    RunControl *activeRunControl = m_runTracker->activeRunControl();
+    m_runLabel->setText(
+        activeRunControl ? runLabel(
+                               activeRunControl->displayName(),
+                               activeRunControl->applicationProcessHandle().pid())
+                         : Tr::tr("No active run"));
 }
 
 void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
@@ -122,14 +154,6 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     // Arm the run-start pop for this run's first line (see onLineReceived()); a run going
     // away (activeRunControl == nullptr) has no "first line" left to pop on.
     m_popOnNextLine = activeRunControl != nullptr;
-
-    if (m_runLabel) {
-        m_runLabel->setText(
-            activeRunControl ? Tr::tr("Filtering: %1 (pid %2)")
-                                   .arg(activeRunControl->displayName())
-                                   .arg(activeRunControl->applicationProcessHandle().pid())
-                             : Tr::tr("No active run"));
-    }
 
     if (!activeRunControl)
         return;
