@@ -5,6 +5,7 @@
 #include <utils/aggregate.h>
 
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTextBlock>
 #include <QtTest>
 
@@ -34,6 +35,8 @@ private slots:
     void goToMatchWithoutMarksDoesNothing();
     void matchStopsSurviveTrimming();
     void resetClearsMatchStops();
+    void saveContentsWritesTabTextAsUtf8();
+    void saveContentsReportsFailure();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -340,6 +343,35 @@ void tst_OutputTabWidget::resetClearsMatchStops()
     appendMarked(tab, "match");
     tab.reset();
     QVERIFY(!tab.hasMatchStops());
+}
+
+void tst_OutputTabWidget::saveContentsWritesTabTextAsUtf8()
+{
+    OutputTabWidget tab;
+    tab.appendLine("first", Utils::StdOutFormat);
+    // Non-ASCII, including a character outside Latin-1, must survive as UTF-8.
+    const QString second = QStringLiteral("zażółć ✓");
+    tab.appendLine(second, Utils::StdOutFormat);
+    QTemporaryDir dir;
+    const Utils::FilePath path = Utils::FilePath::fromString(dir.filePath("tab.txt"));
+
+    const Utils::Result<> result = tab.saveContents(path);
+
+    QVERIFY2(result.has_value(), qPrintable(result.has_value() ? QString() : result.error()));
+    QFile file(path.toFSPathString());
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QCOMPARE(QString::fromUtf8(file.readAll()), "first\n" + second + "\n");
+}
+
+void tst_OutputTabWidget::saveContentsReportsFailure()
+{
+    OutputTabWidget tab;
+    tab.appendLine("text", Utils::StdOutFormat);
+    QTemporaryDir dir;
+    // A directory that doesn't exist.
+    const Utils::FilePath path = Utils::FilePath::fromString(dir.filePath("missing/tab.txt"));
+
+    QVERIFY(!tab.saveContents(path).has_value());
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

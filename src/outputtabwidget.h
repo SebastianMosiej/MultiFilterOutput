@@ -2,7 +2,9 @@
 
 #include "multifilteroutput_global.h"
 
+#include <utils/filepath.h>
 #include <utils/outputformatter.h>
+#include <utils/result.h>
 
 #include <QPlainTextEdit>
 #include <QPoint>
@@ -102,6 +104,10 @@ public:
     // on the full line before it gets here. 0 (the default) means no limit. Applies to lines
     // appended from now on.
     void setMaxLineLength(int maxLength);
+
+    // Writes the tab's text, as shown, to `path` as UTF-8 -- "Save tab to file" in the pane's
+    // toolbar.
+    Utils::Result<> saveContents(const Utils::FilePath &path) const;
 
 signals:
     // Coalesced: emitted once per event-loop pass however many matches were appended in it

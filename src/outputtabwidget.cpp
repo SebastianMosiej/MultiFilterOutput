@@ -288,6 +288,14 @@ int OutputTabWidget::goToMatch(Direction direction)
     return -1;
 }
 
+Utils::Result<> OutputTabWidget::saveContents(const Utils::FilePath &path) const
+{
+    const Utils::Result<qint64> written = path.writeFileContents(toPlainText().toUtf8());
+    if (!written)
+        return Utils::ResultError(written.error());
+    return Utils::ResultOk;
+}
+
 void OutputTabWidget::setMaxLineLength(int maxLength)
 {
     m_maxLineLength = maxLength;
