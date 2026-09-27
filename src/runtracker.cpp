@@ -35,18 +35,18 @@ void RunTracker::trackRunControl(RunControl *runControl)
     if (!runControl || m_buffers.contains(runControl))
         return;
 
-    m_buffers.insert(runControl, LineBuffer());
+    m_buffers.insert(runControl, OutputLineSplitter());
 
     connect(
         runControl,
         &RunControl::appendMessage,
         this,
         [this, runControl](const QString &msg, Utils::OutputFormat format) {
-            const QStringList lines = m_buffers[runControl].feed(msg);
+            const QList<OutputLineSplitter::Line> lines = m_buffers[runControl].feed(msg, format);
             if (runControl != m_active)
                 return;
-            for (const QString &line : lines)
-                emit activeRunLineReceived(line, format);
+            for (const OutputLineSplitter::Line &line : lines)
+                emit activeRunLineReceived(line.text, line.format);
         });
 
     connect(runControl, &QObject::destroyed, this, [this, runControl] {
@@ -60,6 +60,17 @@ void RunTracker::untrackRunControl(RunControl *runControl)
 {
     if (!runControl)
         return;
+
+    // The run's last line need not end in a newline (a crash message, a final printf with
+    // no "\n"), in which case it is still sitting in the buffer; emit it now rather than
+    // drop it along with the buffer below.
+    if (const auto it = m_buffers.find(runControl); it != m_buffers.end()) {
+        const QList<OutputLineSplitter::Line> pending = it->flush();
+        if (runControl == m_active) {
+            for (const OutputLineSplitter::Line &line : pending)
+                emit activeRunLineReceived(line.text, line.format);
+        }
+    }
 
     // Drop every connection this tracker installed on the now-stopped run. Without this a
     // stray late appendMessage() would re-create the run's hash entry via operator[] on a

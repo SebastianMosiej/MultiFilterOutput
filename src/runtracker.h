@@ -47,7 +47,7 @@ private:
     void handleRunControlDestroyed(ProjectExplorer::RunControl *runControl);
     void activateRunControl(ProjectExplorer::RunControl *runControl);
 
-    QHash<ProjectExplorer::RunControl *, LineBuffer> m_buffers;
+    QHash<ProjectExplorer::RunControl *, OutputLineSplitter> m_buffers;
     ProjectExplorer::RunControl *m_active = nullptr;
 };
 
