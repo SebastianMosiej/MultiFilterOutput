@@ -22,6 +22,16 @@ std::optional<Pattern> PatternLibrary::patternById(const QString &id) const
     return std::nullopt;
 }
 
+QList<Pattern> PatternLibrary::patternsWithIds(const QStringList &ids) const
+{
+    QList<Pattern> result;
+    for (const Pattern &p : m_patterns) {
+        if (ids.contains(p.id))
+            result.append(p);
+    }
+    return result;
+}
+
 void PatternLibrary::addOrUpdate(const Pattern &pattern)
 {
     for (Pattern &existing : m_patterns) {

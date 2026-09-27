@@ -16,6 +16,7 @@ private slots:
     void patternByIdReturnsNulloptWhenMissing();
     void mutationsEmitPatternsChanged();
     void setPatternsReplacesWholeListAndEmitsOnce();
+    void patternsWithIdsFollowsLibraryOrder();
 };
 
 void tst_PatternLibrary::addOrUpdateInsertsNewPattern()
@@ -92,6 +93,27 @@ void tst_PatternLibrary::setPatternsReplacesWholeListAndEmitsOnce()
     QCOMPARE(lib.patterns().at(0).name, QStringLiteral("First"));
     QCOMPARE(lib.patterns().at(1).name, QStringLiteral("Second"));
     QVERIFY(!lib.patternById(stale.id).has_value());
+}
+
+// A run configuration's enabled ids are stored in the order their boxes were ticked; the
+// tabs must still follow the Pattern Library's own order, which is what the user reorders.
+// Ids no longer in the library (pattern deleted since) are skipped.
+void tst_PatternLibrary::patternsWithIdsFollowsLibraryOrder()
+{
+    PatternLibrary lib;
+    Pattern a = Pattern::createNew();
+    a.name = "A";
+    Pattern b = Pattern::createNew();
+    b.name = "B";
+    Pattern c = Pattern::createNew();
+    c.name = "C";
+    lib.setPatterns({a, b, c});
+
+    const QList<Pattern> result = lib.patternsWithIds({c.id, "deleted-id", a.id});
+
+    QCOMPARE(result.size(), 2);
+    QCOMPARE(result.at(0).name, QStringLiteral("A"));
+    QCOMPARE(result.at(1).name, QStringLiteral("C"));
 }
 
 QTEST_GUILESS_MAIN(tst_PatternLibrary)

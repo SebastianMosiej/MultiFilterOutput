@@ -17,6 +17,10 @@ class MULTIFILTEROUTPUT_EXPORT PatternLibrary : public QObject
 public:
     QList<Pattern> patterns() const;
     std::optional<Pattern> patternById(const QString &id) const;
+    // The patterns whose ids are in `ids`, in the library's own order (the order the user
+    // arranges on the settings page) rather than the order of `ids`. Ids with no pattern in
+    // the library -- e.g. one deleted since a run configuration selected it -- are skipped.
+    QList<Pattern> patternsWithIds(const QStringList &ids) const;
 
     void addOrUpdate(const Pattern &pattern);
     void remove(const QString &id);
