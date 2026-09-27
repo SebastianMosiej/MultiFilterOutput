@@ -24,6 +24,39 @@ void LineQueue::setOverflowHandling(qsizetype maxQueuedCharacters, DiscardSink o
     m_discardSink = std::move(onDiscarded);
 }
 
+void LineQueue::setDiscardExcessiveOutput(bool enabled)
+{
+    m_discardExcessiveOutput = enabled;
+}
+
+bool LineQueue::isHopelesslyBehind()
+{
+    const qsizetype backlog = m_queue.size();
+
+    // Being flooded: the backlog hasn't shrunk for the last ten slices and is considerably
+    // more than a slice's worth.
+    if (!m_backlogHistory.isEmpty() && m_backlogHistory.last() > backlog)
+        m_backlogHistory.clear();
+    m_backlogHistory << backlog;
+    if (m_backlogHistory.size() > 10 && backlog > 5 * m_lastSliceLines)
+        return true;
+
+    // Too slow: at the current rate, working through the backlog would take over a minute --
+    // judged only once a reasonable amount of output has been shown.
+    return m_slices >= 10 && m_lastSliceLines > 0
+           && (backlog / m_lastSliceLines) * m_budget > std::chrono::minutes(1);
+}
+
+void LineQueue::reportDiscards()
+{
+    if (m_discardedPending == 0)
+        return;
+    if (m_discardSink)
+        m_discardSink(std::exchange(m_discardedPending, 0));
+    else
+        m_discardedPending = 0;
+}
+
 void LineQueue::enqueue(const QString &line, Utils::OutputFormat format)
 {
     m_queue.enqueue({line, format});
@@ -44,6 +77,9 @@ void LineQueue::clear()
     m_queue.clear();
     m_queuedCharacters = 0;
     m_discardedPending = 0;
+    m_backlogHistory.clear();
+    m_slices = 0;
+    m_lastSliceLines = 0;
     m_timer.stop();
 }
 
@@ -57,15 +93,17 @@ int LineQueue::processPending()
     QElapsedTimer elapsed;
     elapsed.start();
 
+    if (m_discardExcessiveOutput && !m_queue.isEmpty() && isHopelesslyBehind()) {
+        m_discardedPending += int(m_queue.size());
+        m_queue.clear();
+        m_queuedCharacters = 0;
+        m_backlogHistory.clear();
+    }
+
     int processed = 0;
     while (!m_queue.isEmpty()) {
         // Everything dropped came before whatever is still queued.
-        if (m_discardedPending > 0) {
-            if (m_discardSink)
-                m_discardSink(std::exchange(m_discardedPending, 0));
-            else
-                m_discardedPending = 0;
-        }
+        reportDiscards();
         const auto [line, format] = m_queue.dequeue();
         m_queuedCharacters -= line.size();
         m_sink(line, format);
@@ -73,6 +111,14 @@ int LineQueue::processPending()
         if (elapsed.durationElapsed() >= m_budget)
             break;
     }
+
+    if (processed > 0) {
+        m_lastSliceLines = processed;
+        ++m_slices;
+    }
+    // Nothing left to put the notice in front of (the whole backlog was dropped): say so now.
+    if (m_queue.isEmpty())
+        reportDiscards();
 
     if (!m_queue.isEmpty() && !m_timer.isActive())
         m_timer.start();

@@ -46,6 +46,14 @@ public:
     // Creator's memory bounded when an app outputs faster than the pane can filter.
     void setOverflowHandling(qsizetype maxQueuedCharacters, DiscardSink onDiscarded);
 
+    // Opt-in flood control, mirroring Core::OutputWindow::discardExcessiveOutput() -- what
+    // Application Output does when the user turns on its "Discard excessive output" setting.
+    // Checked at the start of every slice: the whole backlog is dropped (and reported via
+    // the DiscardSink) when it has not shrunk for the last 10 slices and holds more than 5
+    // slices' worth of lines, or when, after 10 slices, draining it at the current rate would
+    // take over a minute. Off by default, like the setting.
+    void setDiscardExcessiveOutput(bool enabled);
+
     void enqueue(const QString &line, Utils::OutputFormat format);
     // Drops every line not yet handed to the sink.
     void clear();
@@ -57,6 +65,9 @@ public:
     int processPending();
 
 private:
+    bool isHopelesslyBehind();
+    void reportDiscards();
+
     Sink m_sink;
     std::chrono::milliseconds m_budget;
     QQueue<std::pair<QString, Utils::OutputFormat>> m_queue;
@@ -65,6 +76,12 @@ private:
     DiscardSink m_discardSink;
     // Lines dropped since the last report to m_discardSink; reported before the next line.
     int m_discardedPending = 0;
+    bool m_discardExcessiveOutput = false;
+    // For setDiscardExcessiveOutput(): the backlog at the start of each slice since it last
+    // shrank, the number of slices run, and how many lines the last one handled.
+    QList<qsizetype> m_backlogHistory;
+    int m_slices = 0;
+    int m_lastSliceLines = 0;
     QTimer m_timer;
 };
 
