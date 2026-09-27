@@ -15,6 +15,10 @@ private slots:
     void carriageReturnNewlineHandled();
     void flushReturnsPendingPartialLineOnce();
     void flushDropsTrailingCarriageReturn();
+    void unterminatedOutputIsEmittedInCappedPieces();
+    void capAppliesAcrossChunks();
+    void longCompleteLineIsSplitToo();
+    void capNeverSplitsSurrogatePair();
     void splitterKeepsInterleavedFormatsApart();
     void splitterFlushReturnsEveryFormatsPendingLine();
 };
@@ -62,6 +66,43 @@ void tst_LineBuffer::flushDropsTrailingCarriageReturn()
     LineBuffer buf;
     QVERIFY(buf.feed("last\r").isEmpty());
     QCOMPARE(buf.flush(), QStringLiteral("last"));
+}
+
+// Output that never contains a newline (progress bars, binary dumps) must not pile up in the
+// pending partial line forever; whole capped pieces come out as soon as they are available.
+void tst_LineBuffer::unterminatedOutputIsEmittedInCappedPieces()
+{
+    LineBuffer buf(10);
+    QCOMPARE(buf.feed("abcdefghijklmnopqrstuvwxy"), (QStringList{"abcdefghij", "klmnopqrst"}));
+    QCOMPARE(buf.flush(), QStringLiteral("uvwxy"));
+}
+
+void tst_LineBuffer::capAppliesAcrossChunks()
+{
+    LineBuffer buf(10);
+    QVERIFY(buf.feed("abcdef").isEmpty());
+    QCOMPARE(buf.feed("ghijkl"), QStringList{"abcdefghij"});
+    QCOMPARE(buf.feed("\n"), QStringList{"kl"});
+}
+
+// Same pieces whether the long line arrived in one chunk or many, so the result doesn't
+// depend on how the OS happened to chunk the output.
+void tst_LineBuffer::longCompleteLineIsSplitToo()
+{
+    LineBuffer buf(10);
+    QCOMPARE(
+        buf.feed("abcdefghijklmnopqrstuvwxy\nshort\n"),
+        (QStringList{"abcdefghij", "klmnopqrst", "uvwxy", "short"}));
+}
+
+void tst_LineBuffer::capNeverSplitsSurrogatePair()
+{
+    LineBuffer buf(4);
+    // "abc" + U+1F600 (a surrogate pair) + "de": a cut after 4 UTF-16 units would split it.
+    const QString text = QStringLiteral("abc") + QString::fromUcs4(U"\U0001F600") + "de";
+    QCOMPARE(
+        buf.feed(text + "\n"),
+        (QStringList{"abc", QString::fromUcs4(U"\U0001F600") + "de"}));
 }
 
 // A stdout fragment still waiting for its newline must not be glued onto a stderr line that

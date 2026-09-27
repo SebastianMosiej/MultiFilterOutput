@@ -4,14 +4,51 @@
 
 namespace MultiFilterOutput {
 
+namespace {
+
+// Where to cut a piece of at most maxLength UTF-16 units off the front of `text`: maxLength,
+// unless that would separate a surrogate pair, in which case one unit earlier.
+qsizetype cutLength(const QString &text, qsizetype maxLength)
+{
+    if (maxLength > 1 && text.at(maxLength - 1).isHighSurrogate())
+        return maxLength - 1;
+    return maxLength;
+}
+
+// Moves maxLength-sized pieces off the front of `text` into `out` for as long as `text` is
+// longer than maxLength, leaving the (non-empty) remainder in `text`.
+void takeCappedPieces(QString &text, qsizetype maxLength, QStringList &out)
+{
+    while (text.size() > maxLength) {
+        const qsizetype n = cutLength(text, maxLength);
+        out.append(text.left(n));
+        text.remove(0, n);
+    }
+}
+
+} // namespace
+
+LineBuffer::LineBuffer(qsizetype maxLineLength)
+    : m_maxLineLength(maxLineLength)
+{}
+
 QStringList LineBuffer::feed(const QString &chunk)
 {
     QString combined = m_partial + chunk;
     combined.replace("\r\n", "\n");
 
-    QStringList lines = combined.split('\n');
+    QStringList parts = combined.split('\n');
     // The last element is either "" (chunk ended on a newline) or a partial line.
-    m_partial = lines.takeLast();
+    m_partial = parts.takeLast();
+
+    QStringList lines;
+    for (QString &part : parts) {
+        takeCappedPieces(part, m_maxLineLength, lines);
+        lines.append(part);
+    }
+    // Only ever leaves a non-empty remainder behind, so a trailing "\r" -- possibly the first
+    // half of a "\r\n" split across chunks -- always stays pending rather than being emitted.
+    takeCappedPieces(m_partial, m_maxLineLength, lines);
     return lines;
 }
 

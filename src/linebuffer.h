@@ -14,12 +14,20 @@ namespace MultiFilterOutput {
 class MULTIFILTEROUTPUT_EXPORT LineBuffer
 {
 public:
+    static constexpr qsizetype DefaultMaxLineLength = 64 * 1024;
+
+    // No line is ever longer than maxLineLength: longer text -- a complete line, or output
+    // that simply never contains a newline (progress bars, binary dumps) -- is emitted in
+    // pieces of at most that length, so the pending partial line can't grow without bound.
+    explicit LineBuffer(qsizetype maxLineLength = DefaultMaxLineLength);
+
     QStringList feed(const QString &chunk);
     // Returns the pending incomplete line (text fed since the last newline), if any, and
     // empties the buffer -- for when the stream has ended and no newline is coming.
     QString flush();
 
 private:
+    qsizetype m_maxLineLength;
     QString m_partial;
 };
 
