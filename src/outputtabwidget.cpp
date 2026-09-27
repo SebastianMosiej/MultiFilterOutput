@@ -233,6 +233,60 @@ qreal OutputTabWidget::fontZoom() const
     return font().pointSizeF() - m_baseFontSize;
 }
 
+namespace {
+
+// Block format property marking a line as a match stop (see markLastLineAsMatch()).
+constexpr int MatchStopProperty = QTextFormat::UserProperty + 1;
+
+bool isMatchStop(const QTextBlock &block)
+{
+    return block.blockFormat().boolProperty(MatchStopProperty);
+}
+
+} // namespace
+
+void OutputTabWidget::markLastLineAsMatch()
+{
+    // The last block is the empty one appendLine()'s newline opened; the line is before it.
+    const QTextBlock block = document()->lastBlock().previous();
+    if (!block.isValid())
+        return;
+    QTextBlockFormat format = block.blockFormat();
+    format.setProperty(MatchStopProperty, true);
+    QTextCursor(block).setBlockFormat(format);
+    ++m_matchStops;
+}
+
+bool OutputTabWidget::hasMatchStops() const
+{
+    return m_matchStops > 0;
+}
+
+int OutputTabWidget::goToMatch(Direction direction)
+{
+    if (m_matchStops == 0)
+        return -1;
+    const bool forward = direction == Direction::Forward;
+    const QTextBlock start = textCursor().block();
+
+    // Every block at most once, starting just past the current one and wrapping around, so
+    // the current line itself comes last -- and is found if it is the only match.
+    QTextBlock block = forward ? start.next() : start.previous();
+    for (int visited = 0; visited < document()->blockCount(); ++visited) {
+        if (!block.isValid())
+            block = forward ? document()->firstBlock() : document()->lastBlock();
+        if (isMatchStop(block)) {
+            QTextCursor cursor(block);
+            cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+            setTextCursor(cursor);
+            centerCursor();
+            return block.userState();
+        }
+        block = forward ? block.next() : block.previous();
+    }
+    return -1;
+}
+
 void OutputTabWidget::setMaxLineLength(int maxLength)
 {
     m_maxLineLength = maxLength;

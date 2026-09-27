@@ -30,6 +30,9 @@ private slots:
     void lineIdsWrapInsteadOfOverflowing();
     void lineIdAgeAcrossTheWrap();
     void ctrlFFindsTextInTab();
+    void goToMatchStepsThroughMarkedLinesAndWraps();
+    void goToMatchWithoutMarksDoesNothing();
+    void matchStopsSurviveTrimming();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -269,6 +272,64 @@ void tst_OutputTabWidget::ctrlFFindsTextInTab()
     QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("needle"));
     QCOMPARE(tab.textCursor().block().text(), QStringLiteral("the needle is here"));
     QCOMPARE(find->findStep("absent", {}), Core::IFindSupport::NotFound);
+}
+
+static void appendMarked(OutputTabWidget &tab, const QString &line, int sourceLineId = -1)
+{
+    tab.appendLine(line, Utils::StdOutFormat, sourceLineId);
+    tab.markLastLineAsMatch();
+}
+
+// F6 / Shift+F6 step from match to match -- skipping unmarked lines such as continuation
+// lines -- and wrap around at either end, like Qt Creator's other navigable panes.
+void tst_OutputTabWidget::goToMatchStepsThroughMarkedLinesAndWraps()
+{
+    OutputTabWidget tab;
+    appendMarked(tab, "match one", 10);
+    tab.appendLine("  continuation", Utils::StdOutFormat, 11, /*countsAsMatch=*/false);
+    appendMarked(tab, "match two", 12);
+    tab.appendLine("  continuation", Utils::StdOutFormat, 13, /*countsAsMatch=*/false);
+    QVERIFY(tab.hasMatchStops());
+    tab.moveCursor(QTextCursor::Start);
+
+    QCOMPARE(tab.goToMatch(OutputTabWidget::Direction::Forward), 12);
+    QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("match two"));
+    QCOMPARE(tab.goToMatch(OutputTabWidget::Direction::Forward), 10); // wrapped
+    QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("match one"));
+    QCOMPARE(tab.goToMatch(OutputTabWidget::Direction::Backward), 12); // wrapped back
+    QCOMPARE(tab.goToMatch(OutputTabWidget::Direction::Backward), 10);
+}
+
+void tst_OutputTabWidget::goToMatchWithoutMarksDoesNothing()
+{
+    OutputTabWidget tab;
+    tab.appendLine("plain", Utils::StdOutFormat);
+    tab.moveCursor(QTextCursor::Start);
+    const int positionBefore = tab.textCursor().position();
+
+    QVERIFY(!tab.hasMatchStops());
+    QCOMPARE(tab.goToMatch(OutputTabWidget::Direction::Forward), -1);
+    QCOMPARE(tab.textCursor().position(), positionBefore);
+}
+
+// Marks live on the line's block, so trimming the front of the tab takes them with it and
+// leaves the rest where they are.
+void tst_OutputTabWidget::matchStopsSurviveTrimming()
+{
+    OutputTabWidget tab;
+    tab.setMaximumBlockCount(6);
+    for (int i = 0; i < 20; ++i) {
+        if (i % 2 == 0)
+            appendMarked(tab, QStringLiteral("match %1").arg(i));
+        else
+            tab.appendLine(QStringLiteral("other %1").arg(i), Utils::StdOutFormat);
+    }
+    tab.moveCursor(QTextCursor::End);
+
+    tab.goToMatch(OutputTabWidget::Direction::Backward);
+    QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("match 18"));
+    tab.goToMatch(OutputTabWidget::Direction::Backward);
+    QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("match 16"));
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

@@ -73,6 +73,19 @@ public:
     // untouched, if no such line is (any longer) in this tab.
     bool scrollToLine(int lineId);
 
+    // Match stops for next/previous-match navigation (F6 / Shift+F6): which lines count is
+    // the caller's decision -- FilteredOutputPane marks a pattern tab's matches (not its
+    // continuation lines) and the All lines that matched any pattern. Stored on the line's
+    // own block, so marks survive trimming like line ids do.
+    void markLastLineAsMatch();
+    bool hasMatchStops() const;
+
+    enum class Direction { Forward, Backward };
+    // Moves the cursor to the next/previous marked line after/before the current one,
+    // wrapping around at the end/start, selects that line and scrolls to it. Returns its line
+    // id (see appendLine()), or -1 -- leaving the view alone -- if no line is marked.
+    int goToMatch(Direction direction);
+
     // Sets the font this tab treats as "unzoomed", preserving whatever zoom offset (if any)
     // is currently applied -- e.g. when the Preferences > Text Editor font changes live.
     void setBaseFont(const QFont &font);
@@ -111,6 +124,10 @@ private:
     Utils::OutputFormatter m_formatter;
     // The line id appendLine() gives the next line appended without a sourceLineId.
     int m_nextLineId = 0;
+    // Lines marked by markLastLineAsMatch(); only ever counts up (trimming doesn't lower it),
+    // so hasMatchStops() may say yes while every marked line is already gone -- goToMatch()
+    // then just finds nothing.
+    int m_matchStops = 0;
     int m_maxLineLength = 0;
     QPoint m_pressPos;
     int m_matchCount = 0;
