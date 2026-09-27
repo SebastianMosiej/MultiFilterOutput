@@ -71,6 +71,12 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::watchRunLabel);
     connect(tracker, &RunTracker::activeRunLineReceived, this, &FilteredOutputPane::onLineReceived);
+    // Pattern edits apply to the running run straight away, not just from the next one.
+    connect(
+        &patternLibrary(),
+        &PatternLibrary::patternsChanged,
+        this,
+        &FilteredOutputPane::onPatternsChanged);
 
     // Word wrap and zoom from the toolbar (and the zoom shortcuts), for every tab.
     connect(&outputPaneSettings(), &OutputPaneSettings::wordWrapChanged, this, [this](bool enabled) {
@@ -296,14 +302,7 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     if (!m_tabWidget)
         return;
 
-    for (const PatternTab &entry : std::as_const(m_patternTabs)) {
-        const int index = m_tabWidget->indexOf(entry.tab);
-        if (index != -1)
-            m_tabWidget->removeTab(index);
-        entry.tab->deleteLater();
-    }
-    m_patternTabs.clear();
-    m_router = LineRouter();
+    removePatternTabs();
     // Lines still queued belong to the run being replaced (or to the tab set being torn
     // down); they must not land in the fresh tabs.
     m_lineQueue->clear();
@@ -330,21 +329,42 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     Project *project = activeRunControl->project();
     m_allTab->setLinkParser(project);
 
+    createPatternTabs(project, enabledPatterns(activeRunControl));
+}
+
+QList<Pattern> FilteredOutputPane::enabledPatterns(RunControl *runControl) const
+{
     // RunControl (v20.0.82) does not retain a live RunConfiguration* of its own -- it only
     // copies data out of one at start time (copyDataFromRunConfiguration), snapshotting each
     // aspect's Data into a stable, launch-time-frozen copy. Reading through the current
     // BuildConfiguration's activeRunConfiguration() instead would pick up whichever run
     // configuration happens to be active *now*, not the one this run was actually launched
     // from -- so we must read the RunControl's own snapshot here.
-    const auto *filterData = activeRunControl->aspectData<FilterSetAspect>();
+    const auto *filterData = runControl->aspectData<FilterSetAspect>();
     const QStringList enabledIds = filterData ? filterData->value.toStringList() : QStringList();
 
     // Library order, not enabledIds order: the latter is just the order the boxes were
     // ticked in, while the library's is the one the user deliberately arranges. Patterns
     // deleted since the selection was saved are skipped silently.
-    const QList<Pattern> patterns = patternLibrary().patternsWithIds(enabledIds);
-    // Fresh per run: continuation state and slow-pattern breakers start over. Its pattern
-    // indexes are m_patternTabs' indexes.
+    return patternLibrary().patternsWithIds(enabledIds);
+}
+
+void FilteredOutputPane::removePatternTabs()
+{
+    for (const PatternTab &entry : std::as_const(m_patternTabs)) {
+        const int index = m_tabWidget->indexOf(entry.tab);
+        if (index != -1)
+            m_tabWidget->removeTab(index);
+        entry.tab->deleteLater();
+    }
+    m_patternTabs.clear();
+    m_router = LineRouter();
+}
+
+void FilteredOutputPane::createPatternTabs(Project *project, const QList<Pattern> &patterns)
+{
+    // Fresh with the tabs: continuation state and slow-pattern breakers start over. Its
+    // pattern indexes are m_patternTabs' indexes.
     m_router = LineRouter(patterns);
     for (const Pattern &pattern : patterns) {
         auto *tab = new OutputTabWidget(m_tabWidget);
@@ -456,6 +476,15 @@ void FilteredOutputPane::processLine(const QString &line, Utils::OutputFormat fo
     const int allLine = m_allTab->appendLine(line, format);
 
     const bool couldNavigate = canNext();
+    if (routeToPatternTabs(line, format, allLine))
+        m_allTab->markLastLineAsMatch();
+    if (canNext() != couldNavigate)
+        navigateStateChanged();
+}
+
+bool FilteredOutputPane::routeToPatternTabs(
+    const QString &line, Utils::OutputFormat format, int allLine)
+{
     const LineRouter::Result result = m_router.route(line);
     bool matchedAnyPattern = false;
     for (const LineRouter::Route &route : result.routes) {
@@ -466,12 +495,70 @@ void FilteredOutputPane::processLine(const QString &line, Utils::OutputFormat fo
             matchedAnyPattern = true;
         }
     }
-    if (matchedAnyPattern)
-        m_allTab->markLastLineAsMatch();
-    if (canNext() != couldNavigate)
-        navigateStateChanged();
     for (const int index : result.newlyTooSlow)
         reportTooSlow(m_patternTabs.at(index));
+    return matchedAnyPattern;
+}
+
+void FilteredOutputPane::onPatternsChanged()
+{
+    RunControl *run = m_runTracker->activeRunControl();
+    if (!m_tabWidget || !m_allTab || !run)
+        return;
+
+    // The library changes for many reasons (a pattern this run doesn't use was edited or
+    // added, say); only redo the tabs if this run's own patterns are any different.
+    const QList<Pattern> patterns = enabledPatterns(run);
+    const bool unchanged = patterns.size() == m_patternTabs.size()
+                           && std::equal(
+                               patterns.cbegin(), patterns.cend(), m_patternTabs.cbegin(),
+                               [](const Pattern &p, const PatternTab &t) {
+                                   return p.toMap() == t.pattern.toMap();
+                               });
+    if (unchanged)
+        return;
+
+    // Stay on the same tab if its pattern is still there.
+    const OutputTabWidget *current = currentTab();
+    const auto currentEntry = std::find_if(
+        m_patternTabs.cbegin(), m_patternTabs.cend(), [current](const PatternTab &t) {
+            return t.tab == current;
+        });
+    const QString currentPatternId = currentEntry != m_patternTabs.cend()
+                                         ? currentEntry->pattern.id
+                                         : QString();
+
+    removePatternTabs();
+    createPatternTabs(run->project(), patterns);
+
+    // Replay what All still holds through the new patterns -- as shown in All, which is all
+    // that is kept: a line All cut short (see setMaxLineLength()) is matched only as far as
+    // shown. That text is already cut, so the pattern tabs mustn't cut it (and its note)
+    // again while replaying.
+    for (const PatternTab &entry : std::as_const(m_patternTabs))
+        entry.tab->setMaxLineLength(0);
+    m_allTab->clearMatchStops();
+    for (const OutputTabWidget::Line &line : m_allTab->lines()) {
+        if (line.isNotice) {
+            for (const PatternTab &entry : std::as_const(m_patternTabs)) {
+                entry.tab->appendLine(line.text, line.format, line.lineId, /*countsAsMatch=*/false);
+                entry.tab->markLastLineAsNotice();
+            }
+            m_router.resetContinuations();
+            continue;
+        }
+        if (routeToPatternTabs(line.text, line.format, line.lineId))
+            m_allTab->markLineAsMatch(line.lineId);
+    }
+    for (const PatternTab &entry : std::as_const(m_patternTabs))
+        entry.tab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
+
+    for (const PatternTab &entry : std::as_const(m_patternTabs)) {
+        if (!currentPatternId.isEmpty() && entry.pattern.id == currentPatternId)
+            m_tabWidget->setCurrentWidget(entry.tab);
+    }
+    navigateStateChanged();
+    updateFilter();
 }
 
 void FilteredOutputPane::reportDiscarded(int lines)
@@ -484,8 +571,11 @@ void FilteredOutputPane::reportDiscarded(int lines)
                                   "they arrived faster than they could be filtered.]")
                                .arg(lines);
     const int allLine = m_allTab->appendLine(notice, Utils::ErrorMessageFormat);
-    for (const PatternTab &entry : std::as_const(m_patternTabs))
+    m_allTab->markLastLineAsNotice();
+    for (const PatternTab &entry : std::as_const(m_patternTabs)) {
         entry.tab->appendLine(notice, Utils::ErrorMessageFormat, allLine, /*countsAsMatch=*/false);
+        entry.tab->markLastLineAsNotice();
+    }
     // A continuation run can't be continued across a gap: what follows didn't follow the match.
     m_router.resetContinuations();
 }

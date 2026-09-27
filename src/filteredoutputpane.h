@@ -15,6 +15,7 @@ class QToolButton;
 QT_END_NAMESPACE
 
 namespace ProjectExplorer {
+class Project;
 class RunControl;
 }
 
@@ -49,6 +50,16 @@ public:
 
 private:
     void rebuildTabs(ProjectExplorer::RunControl *activeRunControl);
+    // The patterns a run's configuration enabled, in Pattern Library order.
+    QList<Pattern> enabledPatterns(ProjectExplorer::RunControl *runControl) const;
+    void removePatternTabs();
+    void createPatternTabs(ProjectExplorer::Project *project, const QList<Pattern> &patterns);
+    // Appends one line to every pattern tab it belongs in (All already has it, as allLine);
+    // returns whether any pattern matched it.
+    bool routeToPatternTabs(const QString &line, Utils::OutputFormat format, int allLine);
+    // Rebuilds the pattern tabs when this run's patterns were edited, and replays All
+    // through them.
+    void onPatternsChanged();
     OutputTabWidget *currentTab() const;
     // Toolbar: pane-wide zoom by `points` (zoom buttons and shortcuts), copy and save the
     // current tab, and the word-wrap setting applied to a tab.
