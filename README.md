@@ -35,9 +35,14 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
 - **Matches Application Output's font** — every tab uses the same font as
   *Application Output* (Preferences > Text Editor > Font & Colors), live:
   changing it there updates already-open tabs immediately.
-- **Synced, persisted zoom** — Ctrl+wheel zooms a tab; every other tab in
-  the same pane (the **All** tab and every pattern tab) follows to the same
-  size, across new runs and across Qt Creator restarts.
+- **Synced, persisted zoom** — Ctrl+wheel in a tab, the pane's zoom
+  buttons, or Ctrl++ / Ctrl+- / Ctrl+0; every tab in the pane (the **All**
+  tab and every pattern tab) follows to the same size, across new runs and
+  across Qt Creator restarts.
+- **Toolbar** — besides zoom and Qt Creator's usual *Clear*: **Wrap**
+  toggles word-wrapping in all tabs (on by default, remembered), **Copy**
+  puts the current tab's text on the clipboard, and **Save** writes it to
+  a file (UTF-8).
 - **Follows the tail** — every tab stays pinned to the newest line as
   output streams in, the way *Application Output* does. Scroll up and it
   stops following, so a log that is still growing doesn't yank the view out

@@ -42,17 +42,25 @@ public:
     int maxDisplayedLineLength() const;
     void setMaxDisplayedLineLength(int length);
 
+    // Whether every tab word-wraps long lines, toggled from the pane's toolbar. On by default,
+    // like Application Output's "Word-wrap output". Applied to open tabs straight away (see
+    // wordWrapChanged()).
+    bool wordWrap() const;
+    void setWordWrap(bool enabled);
+
     void load();
 
 signals:
     void placementChanged(OutputPanePlacement placement);
     void maxDisplayedLineLengthChanged(int length);
+    void wordWrapChanged(bool enabled);
 
 private:
     OutputPanePlacement m_placement = OutputPanePlacement::NextToApplicationOutput;
     bool m_jumpToAllOnClick = true;
     bool m_focusPaneOnRunStart = false;
     int m_maxDisplayedLineLength = DefaultMaxDisplayedLineLength;
+    bool m_wordWrap = true;
 };
 
 MULTIFILTEROUTPUT_EXPORT OutputPaneSettings &outputPaneSettings();

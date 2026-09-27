@@ -17,10 +17,17 @@
 #include <projectexplorer/project.h>
 #include <projectexplorer/runcontrol.h>
 
+#include <utils/fileutils.h>
 #include <utils/qtcsettings.h>
+#include <utils/utilsicons.h>
 #include <utils/theme/theme.h>
 
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QLabel>
+#include <QMessageBox>
+#include <QRegularExpression>
+#include <QToolButton>
 #include <QTabBar>
 #include <QVBoxLayout>
 
@@ -61,6 +68,19 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::watchRunLabel);
     connect(tracker, &RunTracker::activeRunLineReceived, this, &FilteredOutputPane::onLineReceived);
 
+    // Word wrap and zoom from the toolbar (and the zoom shortcuts), for every tab.
+    connect(&outputPaneSettings(), &OutputPaneSettings::wordWrapChanged, this, [this](bool enabled) {
+        if (m_wrapButton)
+            m_wrapButton->setChecked(enabled);
+        if (m_allTab)
+            applyWordWrap(m_allTab);
+        for (const PatternTab &entry : std::as_const(m_patternTabs))
+            applyWordWrap(entry.tab);
+    });
+    connect(this, &IOutputPane::zoomInRequested, this, [this](int range) { zoomBy(range); });
+    connect(this, &IOutputPane::zoomOutRequested, this, [this](int range) { zoomBy(-range); });
+    connect(this, &IOutputPane::resetZoomRequested, this, [this] { onTabZoomChanged(0); });
+
     // One limit for every tab, changed live from the Pattern Library settings page.
     connect(
         &outputPaneSettings(),
@@ -80,12 +100,15 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
         m_container = new QWidget(parent);
         m_tabWidget = new OutputPaneTabWidget(m_container);
         styleTabBar();
+        // So the zoom shortcuts (Ctrl++ / Ctrl+- / Ctrl+0) reach this pane when it has focus.
+        setupContext(Utils::Id(Constants::PANE_CONTEXT), m_container);
         // Next/previous-match navigation works on the current tab.
         connect(m_tabWidget, &QTabWidget::currentChanged, this, &IOutputPane::navigateStateChanged);
 
         m_allTab = new OutputTabWidget(m_tabWidget);
         m_allTab->setFontZoom(m_fontZoom);
         m_allTab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
+        applyWordWrap(m_allTab);
         connect(m_allTab, &OutputTabWidget::fontZoomChanged, this, &FilteredOutputPane::onTabZoomChanged);
         m_tabWidget->addTab(m_allTab, Tr::tr("All"));
 
@@ -100,12 +123,78 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
 
 QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
 {
+    auto *self = const_cast<FilteredOutputPane *>(this);
     if (!m_runLabel) {
-        auto *self = const_cast<FilteredOutputPane *>(this);
         self->m_runLabel = new QLabel;
         self->updateRunLabel();
     }
-    return {m_runLabel};
+    if (!m_wrapButton) {
+        self->m_wrapButton = new QToolButton;
+        m_wrapButton->setText(Tr::tr("Wrap"));
+        m_wrapButton->setToolTip(Tr::tr("Word-wrap long lines in all tabs"));
+        m_wrapButton->setCheckable(true);
+        m_wrapButton->setChecked(outputPaneSettings().wordWrap());
+        connect(m_wrapButton, &QToolButton::toggled, self, [](bool checked) {
+            outputPaneSettings().setWordWrap(checked);
+        });
+
+        self->m_copyButton = new QToolButton;
+        m_copyButton->setIcon(Utils::Icons::COPY_TOOLBAR.icon());
+        m_copyButton->setToolTip(Tr::tr("Copy the current tab's contents"));
+        connect(m_copyButton, &QToolButton::clicked, self, &FilteredOutputPane::copyCurrentTab);
+
+        self->m_saveButton = new QToolButton;
+        m_saveButton->setIcon(Utils::Icons::SAVEFILE_TOOLBAR.icon());
+        m_saveButton->setToolTip(Tr::tr("Save the current tab to a file..."));
+        connect(m_saveButton, &QToolButton::clicked, self, &FilteredOutputPane::saveCurrentTab);
+    }
+    // IOutputPane's own widgets are the zoom in/out buttons (see zoomBy()).
+    return IOutputPane::toolBarWidgets() << m_wrapButton << m_copyButton << m_saveButton
+                                         << m_runLabel;
+}
+
+void FilteredOutputPane::applyWordWrap(OutputTabWidget *tab)
+{
+    tab->setLineWrapMode(
+        outputPaneSettings().wordWrap() ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
+}
+
+void FilteredOutputPane::zoomBy(qreal points)
+{
+    // The same pane-wide, persisted zoom as Ctrl+wheel in a tab, never below a 4 pt font
+    // (the floor OutputTabWidget itself applies).
+    if (m_allTab && points < 0 && m_allTab->font().pointSizeF() + points < 4)
+        return;
+    onTabZoomChanged(m_fontZoom + points);
+}
+
+void FilteredOutputPane::copyCurrentTab()
+{
+    if (const OutputTabWidget *tab = currentTab())
+        QGuiApplication::clipboard()->setText(tab->toPlainText());
+}
+
+void FilteredOutputPane::saveCurrentTab()
+{
+    const OutputTabWidget *tab = currentTab();
+    if (!tab)
+        return;
+    // Tab labels carry a match count ("Errors (12)"); the file name shouldn't.
+    QString name = m_tabWidget->tabText(m_tabWidget->indexOf(const_cast<OutputTabWidget *>(tab)));
+    name = name.section(" (", 0, 0).trimmed();
+    name.replace(QRegularExpression("[^\\w.-]+"), "_");
+    const Utils::FilePath path = Utils::FileUtils::getSaveFilePath(
+        Tr::tr("Save Tab Contents"),
+        Utils::FileUtils::homePath().pathAppended(name + ".txt"),
+        Tr::tr("Text files (*.txt);;All files (*)"));
+    if (path.isEmpty())
+        return;
+    if (const Utils::Result<> saved = tab->saveContents(path); !saved) {
+        QMessageBox::warning(
+            Core::ICore::dialogParent(),
+            Tr::tr("Save Tab Contents"),
+            Tr::tr("Could not save to \"%1\":\n%2").arg(path.toUserOutput(), saved.error()));
+    }
 }
 
 void FilteredOutputPane::watchRunLabel(RunControl *activeRunControl)
@@ -196,6 +285,7 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
         tab->setLinkParser(project);
         tab->setFontZoom(m_fontZoom);
         tab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
+        applyWordWrap(tab);
         connect(tab, &OutputTabWidget::matchCountChanged, this, [this, pattern, tab](int count) {
             updateTabLabel(pattern, tab, count);
         });

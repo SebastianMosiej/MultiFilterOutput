@@ -11,6 +11,7 @@
 
 QT_BEGIN_NAMESPACE
 class QLabel;
+class QToolButton;
 QT_END_NAMESPACE
 
 namespace ProjectExplorer {
@@ -46,6 +47,12 @@ public:
 private:
     void rebuildTabs(ProjectExplorer::RunControl *activeRunControl);
     OutputTabWidget *currentTab() const;
+    // Toolbar: pane-wide zoom by `points` (zoom buttons and shortcuts), copy and save the
+    // current tab, and the word-wrap setting applied to a tab.
+    void zoomBy(qreal points);
+    void copyCurrentTab();
+    void saveCurrentTab();
+    void applyWordWrap(OutputTabWidget *tab);
     // Steps the current tab to its next/previous match and keeps All at the same line.
     void goToMatch(OutputTabWidget::Direction direction);
     void onLineReceived(const QString &line, Utils::OutputFormat format);
@@ -87,6 +94,9 @@ private:
     // Which of m_patternTabs each line goes to (same indexes); rebuilt with them per run.
     LineRouter m_router;
     QLabel *m_runLabel = nullptr;
+    QToolButton *m_wrapButton = nullptr;
+    QToolButton *m_copyButton = nullptr;
+    QToolButton *m_saveButton = nullptr;
     // The active run's applicationProcessHandleChanged -> updateRunLabel() connection.
     QMetaObject::Connection m_pidConnection;
     qreal m_fontZoom = 0;

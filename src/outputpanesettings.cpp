@@ -86,6 +86,26 @@ void OutputPaneSettings::setMaxDisplayedLineLength(int length)
     emit maxDisplayedLineLengthChanged(m_maxDisplayedLineLength);
 }
 
+bool OutputPaneSettings::wordWrap() const
+{
+    return m_wordWrap;
+}
+
+void OutputPaneSettings::setWordWrap(bool enabled)
+{
+    if (m_wordWrap == enabled)
+        return;
+    m_wordWrap = enabled;
+
+    Utils::QtcSettings *settings = Core::ICore::settings();
+    settings->beginGroup(Constants::SETTINGS_GROUP);
+    settings->setValue(Constants::WORD_WRAP_KEY, enabled);
+    settings->endGroup();
+    settings->sync();
+
+    emit wordWrapChanged(m_wordWrap);
+}
+
 void OutputPaneSettings::load()
 {
     Utils::QtcSettings *settings = Core::ICore::settings();
@@ -95,6 +115,7 @@ void OutputPaneSettings::load()
     m_focusPaneOnRunStart =
         settings->value(Constants::FOCUS_PANE_ON_RUN_START_KEY, false).toBool();
     // Clamped like setMaxDisplayedLineLength(): a hand-edited negative value means no limit.
+    m_wordWrap = settings->value(Constants::WORD_WRAP_KEY, true).toBool();
     m_maxDisplayedLineLength = qMax(
         0,
         settings->value(Constants::MAX_DISPLAYED_LINE_LENGTH_KEY, DefaultMaxDisplayedLineLength)
