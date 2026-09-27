@@ -47,15 +47,7 @@ private:
     void handleRunControlDestroyed(ProjectExplorer::RunControl *runControl);
     void activateRunControl(ProjectExplorer::RunControl *runControl);
 
-    struct RunOutput
-    {
-        LineBuffer buffer;
-        // The format of the most recent chunk -- what a trailing partial line still sitting
-        // in `buffer` when the run stops gets emitted with (see untrackRunControl()).
-        Utils::OutputFormat lastFormat = Utils::StdOutFormat;
-    };
-
-    QHash<ProjectExplorer::RunControl *, RunOutput> m_buffers;
+    QHash<ProjectExplorer::RunControl *, OutputLineSplitter> m_buffers;
     ProjectExplorer::RunControl *m_active = nullptr;
 };
 

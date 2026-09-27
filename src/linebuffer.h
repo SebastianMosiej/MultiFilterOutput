@@ -2,6 +2,10 @@
 
 #include "multifilteroutput_global.h"
 
+#include <utils/outputformat.h>
+
+#include <QList>
+#include <QMap>
 #include <QString>
 #include <QStringList>
 
@@ -17,6 +21,29 @@ public:
 
 private:
     QString m_partial;
+};
+
+// Splits one run's output into complete lines, keeping each output format (stdout, stderr,
+// Qt Creator's own messages, ...) in a LineBuffer of its own. A single shared buffer would
+// glue an unterminated fragment of one stream onto the next chunk of another -- common in
+// practice, since stdout is block-buffered when piped while stderr is not -- producing one
+// line that belongs to neither stream and truncating the fragment's own line.
+class MULTIFILTEROUTPUT_EXPORT OutputLineSplitter
+{
+public:
+    struct Line
+    {
+        QString text;
+        Utils::OutputFormat format;
+    };
+
+    QList<Line> feed(const QString &chunk, Utils::OutputFormat format);
+    // Returns every format's pending incomplete line (see LineBuffer::flush()), in
+    // Utils::OutputFormat order, and empties all buffers.
+    QList<Line> flush();
+
+private:
+    QMap<Utils::OutputFormat, LineBuffer> m_buffers;
 };
 
 } // namespace MultiFilterOutput

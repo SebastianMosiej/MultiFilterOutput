@@ -24,4 +24,24 @@ QString LineBuffer::flush()
     return std::exchange(m_partial, QString());
 }
 
+QList<OutputLineSplitter::Line> OutputLineSplitter::feed(
+    const QString &chunk, Utils::OutputFormat format)
+{
+    QList<Line> result;
+    for (const QString &line : m_buffers[format].feed(chunk))
+        result.append({line, format});
+    return result;
+}
+
+QList<OutputLineSplitter::Line> OutputLineSplitter::flush()
+{
+    QList<Line> result;
+    for (auto it = m_buffers.begin(); it != m_buffers.end(); ++it) {
+        const QString pending = it.value().flush();
+        if (!pending.isEmpty())
+            result.append({pending, it.key()});
+    }
+    return result;
+}
+
 } // namespace MultiFilterOutput

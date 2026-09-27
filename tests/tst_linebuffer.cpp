@@ -15,6 +15,8 @@ private slots:
     void carriageReturnNewlineHandled();
     void flushReturnsPendingPartialLineOnce();
     void flushDropsTrailingCarriageReturn();
+    void splitterKeepsInterleavedFormatsApart();
+    void splitterFlushReturnsEveryFormatsPendingLine();
 };
 
 void tst_LineBuffer::singleCompleteLine()
@@ -60,6 +62,40 @@ void tst_LineBuffer::flushDropsTrailingCarriageReturn()
     LineBuffer buf;
     QVERIFY(buf.feed("last\r").isEmpty());
     QCOMPARE(buf.flush(), QStringLiteral("last"));
+}
+
+// A stdout fragment still waiting for its newline must not be glued onto a stderr line that
+// arrives in between; each stream's line comes out whole, with its own format.
+void tst_LineBuffer::splitterKeepsInterleavedFormatsApart()
+{
+    OutputLineSplitter splitter;
+    QVERIFY(splitter.feed("stdout he", Utils::StdOutFormat).isEmpty());
+
+    const QList<OutputLineSplitter::Line> err = splitter.feed("stderr line\n", Utils::StdErrFormat);
+    QCOMPARE(err.size(), 1);
+    QCOMPARE(err.at(0).text, QStringLiteral("stderr line"));
+    QCOMPARE(err.at(0).format, Utils::StdErrFormat);
+
+    const QList<OutputLineSplitter::Line> out = splitter.feed("ad\n", Utils::StdOutFormat);
+    QCOMPARE(out.size(), 1);
+    QCOMPARE(out.at(0).text, QStringLiteral("stdout head"));
+    QCOMPARE(out.at(0).format, Utils::StdOutFormat);
+}
+
+void tst_LineBuffer::splitterFlushReturnsEveryFormatsPendingLine()
+{
+    OutputLineSplitter splitter;
+    splitter.feed("err tail", Utils::StdErrFormat);
+    splitter.feed("out tail", Utils::StdOutFormat);
+
+    const QList<OutputLineSplitter::Line> flushed = splitter.flush();
+    QCOMPARE(flushed.size(), 2);
+    QCOMPARE(flushed.at(0).text, QStringLiteral("out tail"));
+    QCOMPARE(flushed.at(0).format, Utils::StdOutFormat);
+    QCOMPARE(flushed.at(1).text, QStringLiteral("err tail"));
+    QCOMPARE(flushed.at(1).format, Utils::StdErrFormat);
+
+    QVERIFY(splitter.flush().isEmpty());
 }
 
 QTEST_GUILESS_MAIN(tst_LineBuffer)
