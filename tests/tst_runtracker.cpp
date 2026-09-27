@@ -177,8 +177,9 @@ void tst_RunTracker::rerunOfSameRunControlFlowsAgain()
     QCOMPARE(lines.first().first().toString(), QStringLiteral("second run"));
 }
 
-// ...and should reset the pane like any new run does. It doesn't yet: the re-run is still
-// the latched active run, so activeRunChanged() never fires. Tracked as S24.
+// ...and resets the pane like any new run does -- as Application Output also treats a Re-run
+// like a new run (AppOutputPane::handleOldOutput() for both). The re-run is still the
+// latched active run, so without special handling activeRunChanged() would never fire (S24).
 void tst_RunTracker::rerunOfSameRunControlResetsPane()
 {
     RunTracker tracker;
@@ -189,8 +190,9 @@ void tst_RunTracker::rerunOfSameRunControlResetsPane()
 
     tracker.trackRunControl(run.get());
 
-    QEXPECT_FAIL("", "S24: a re-run of the active RunControl doesn't reset the pane", Continue);
     QCOMPARE(changed.size(), 1);
+    QCOMPARE(changed.first().first().value<RunControl *>(), run.get());
+    QCOMPARE(tracker.activeRunControl(), run.get());
 }
 
 QTEST_MAIN(tst_RunTracker)

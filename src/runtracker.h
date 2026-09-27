@@ -48,7 +48,9 @@ public:
     ProjectExplorer::RunControl *activeRunControl() const;
 
 signals:
-    // Emitted whenever activeRunControl() changes (including to/from nullptr).
+    // Emitted whenever a run becomes the active one -- including the already-active run
+    // starting again (Application Output's Re-run) -- and with nullptr when the active run
+    // goes away. Either way, what the pane shows belongs to a new run from here on.
     void activeRunChanged(ProjectExplorer::RunControl *runControl);
     // Emitted for each complete line from the currently-active run only.
     void activeRunLineReceived(const QString &line, Utils::OutputFormat format);

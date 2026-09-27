@@ -38,6 +38,9 @@ void RunTracker::trackRunControl(RunControl *runControl)
     if (!runControl || m_buffers.contains(runControl))
         return;
 
+    // A Re-run tracks the same RunControl again; untrackRunControl() left its destroyed
+    // connection in place if it was the active run, so drop that rather than stack another.
+    disconnect(runControl, nullptr, this, nullptr);
     m_buffers.insert(runControl, OutputLineSplitter());
 
     connect(
@@ -103,9 +106,10 @@ void RunTracker::handleRunControlDestroyed(RunControl *runControl)
 
 void RunTracker::activateRunControl(RunControl *runControl)
 {
-    if (runControl == m_active)
-        return;
-
+    // Deliberately no "already active" early-out: Application Output's Re-run restarts the
+    // same RunControl, which is still the active one (a stopped run stays latched), and it
+    // must reset the pane just like any newly started run -- as Application Output itself
+    // treats a Re-run like a new run (AppOutputPane::handleOldOutput() for both).
     m_active = runControl;
     emit activeRunChanged(m_active);
 }
