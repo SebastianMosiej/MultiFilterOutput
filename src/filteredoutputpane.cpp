@@ -158,6 +158,13 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     // away (activeRunControl == nullptr) has no "first line" left to pop on.
     m_popOnNextLine = activeRunControl != nullptr;
 
+    // Follow Application Output's "Discard excessive output" (Preferences > Build & Run >
+    // Application Output), picked up per run as Application Output itself applies it when a
+    // run's output window is set up. Its AppOutputSettings aren't exported, so this reads the
+    // persisted key.
+    m_lineQueue->setDiscardExcessiveOutput(
+        Core::ICore::settings()->value("ProjectExplorer/Settings/DiscardAppOutput", false).toBool());
+
     if (!activeRunControl)
         return;
 

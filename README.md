@@ -66,6 +66,12 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   against the whole line. (Separately, output with no line break for more
   than 64 KiB — a binary dump, say — is split into 64 KiB pieces before
   matching, so a pattern can't match across such a split.)
+- **Keeps up with floods like Application Output** — output is filtered in
+  small time slices so Qt Creator stays responsive. If *Application Output*'s
+  **Discard excessive output** (Preferences > Build & Run > Application
+  Output) is on, the pane follows it and drops a backlog it can't catch up
+  with; either way, a runaway backlog is capped so memory stays bounded.
+  Dropped output is marked in every tab where it went missing.
 - **Carriage returns behave like a terminal** — a progress bar that redraws
   its line with `\r` shows, and is matched as, only its latest state.
 - **Slow patterns switch themselves off** — if matching a regular
