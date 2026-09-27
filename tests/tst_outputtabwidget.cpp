@@ -21,6 +21,8 @@ private slots:
     void truncationNeverSplitsSurrogatePair();
     void truncatedLineStillJumps();
     void truncationShowsPlaceholdersLiterally();
+    void truncationDoesNotLeakColorIntoLaterLines();
+    void truncationNeverSplitsEscapeSequence();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -190,6 +192,37 @@ void tst_OutputTabWidget::truncationShowsPlaceholdersLiterally()
     tab.setMaxLineLength(10);
     tab.appendLine("a%1b%2cdefghijklmn", Utils::StdOutFormat);
     QCOMPARE(lastLineText(tab), QStringLiteral("a%1b%2cdef ... [8 more characters not shown]"));
+}
+
+static QColor foregroundOf(const QTextBlock &block)
+{
+    return block.begin().fragment().charFormat().foreground().color();
+}
+
+// The formatter's ANSI state carries over from line to line: if truncation drops a colored
+// line's closing reset, every later line in the tab would stay colored.
+void tst_OutputTabWidget::truncationDoesNotLeakColorIntoLaterLines()
+{
+    OutputTabWidget tab;
+    tab.setMaxLineLength(10);
+    tab.appendLine("before", Utils::StdOutFormat);
+    tab.appendLine(QStringLiteral("\x1b[31m") + QString(20, 'x') + "\x1b[0m", Utils::StdOutFormat);
+    tab.appendLine("after", Utils::StdOutFormat);
+
+    const QTextBlock before = tab.document()->findBlockByNumber(0);
+    const QTextBlock after = tab.document()->lastBlock().previous();
+    QCOMPARE(after.text(), QStringLiteral("after"));
+    QCOMPARE(foregroundOf(after), foregroundOf(before));
+}
+
+// Cutting inside an escape sequence would leave half of it to be rendered as text.
+void tst_OutputTabWidget::truncationNeverSplitsEscapeSequence()
+{
+    OutputTabWidget tab;
+    tab.setMaxLineLength(10);
+    // The cut at 10 falls inside "\x1b[31m", which starts at index 7.
+    tab.appendLine(QStringLiteral("abcdefg\x1b[31mhijklmnop"), Utils::StdOutFormat);
+    QVERIFY2(lastLineText(tab).startsWith("abcdefg ..."), qPrintable(lastLineText(tab)));
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

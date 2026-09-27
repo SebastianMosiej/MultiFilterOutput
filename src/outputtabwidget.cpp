@@ -20,8 +20,32 @@ namespace MultiFilterOutput {
 
 namespace {
 
+const QChar Escape(0x1b);
+
+// If an ANSI escape sequence starts before `cut` but doesn't end before it, the position it
+// starts at -- so the cut can move there instead of leaving half a sequence to be rendered
+// as text. Otherwise `cut` unchanged. A CSI sequence ("ESC [" ...) ends at its final byte,
+// 0x40-0x7e; any other sequence is ESC plus one character.
+qsizetype cutBeforeOpenEscape(const QString &line, qsizetype cut)
+{
+    const qsizetype esc = line.lastIndexOf(Escape, cut - 1);
+    if (esc < 0)
+        return cut;
+    if (esc + 1 >= cut)
+        return esc;
+    if (line.at(esc + 1) != '[')
+        return cut;
+    for (qsizetype i = esc + 2; i < cut; ++i) {
+        const char16_t c = line.at(i).unicode();
+        if (c >= 0x40 && c <= 0x7e)
+            return cut;
+    }
+    return esc;
+}
+
 // `line` as shown in a tab with the given setMaxLineLength(): cut after maxLength characters
-// (one fewer rather than separate a surrogate pair) and followed by how much was left out.
+// -- earlier rather than separate a surrogate pair or split an escape sequence -- and
+// followed by how much was left out.
 QString displayText(const QString &line, int maxLength)
 {
     if (maxLength <= 0 || line.size() <= maxLength)
@@ -29,8 +53,15 @@ QString displayText(const QString &line, int maxLength)
     qsizetype cut = maxLength;
     if (cut > 1 && line.at(cut - 1).isHighSurrogate())
         --cut;
+    cut = cutBeforeOpenEscape(line, cut);
+    QString kept = line.left(cut);
+    // Utils::OutputFormatter carries ANSI state from one line to the next, so if this line
+    // set a color, the reset that would have ended it may be among what was cut: reset
+    // explicitly, or every later line in the tab stays colored.
+    if (line.contains(Escape))
+        kept += Escape + QStringLiteral("[0m");
     return Tr::tr("%1 ... [%2 more characters not shown]")
-        .arg(line.left(cut), QString::number(line.size() - cut)); // not chained: see tabLabel()
+        .arg(kept, QString::number(line.size() - cut)); // not chained: see tabLabel()
 }
 
 } // namespace
