@@ -80,6 +80,8 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
         m_container = new QWidget(parent);
         m_tabWidget = new OutputPaneTabWidget(m_container);
         styleTabBar();
+        // Next/previous-match navigation works on the current tab.
+        connect(m_tabWidget, &QTabWidget::currentChanged, this, &IOutputPane::navigateStateChanged);
 
         m_allTab = new OutputTabWidget(m_tabWidget);
         m_allTab->setFontZoom(m_fontZoom);
@@ -153,6 +155,8 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     // reset(), not clear(): the inherited QPlainTextEdit::clear() leaves the match count,
     // the source-block mapping and the formatter's carry-over buffer stale.
     m_allTab->reset();
+    // No tab has any match stops now (the new pattern tabs start empty too).
+    navigateStateChanged();
 
     // Arm the run-start pop for this run's first line (see onLineReceived()); a run going
     // away (activeRunControl == nullptr) has no "first line" left to pop on.
@@ -295,11 +299,21 @@ void FilteredOutputPane::processLine(const QString &line, Utils::OutputFormat fo
     // pattern tab must record -- not an id of each tab's own.
     const int allLine = m_allTab->appendLine(line, format);
 
+    const bool couldNavigate = canNext();
     const LineRouter::Result result = m_router.route(line);
+    bool matchedAnyPattern = false;
     for (const LineRouter::Route &route : result.routes) {
-        m_patternTabs.at(route.patternIndex)
-            .tab->appendLine(line, format, allLine, route.countsAsMatch);
+        OutputTabWidget *tab = m_patternTabs.at(route.patternIndex).tab;
+        tab->appendLine(line, format, allLine, route.countsAsMatch);
+        if (route.countsAsMatch) {
+            tab->markLastLineAsMatch();
+            matchedAnyPattern = true;
+        }
     }
+    if (matchedAnyPattern)
+        m_allTab->markLastLineAsMatch();
+    if (canNext() != couldNavigate)
+        navigateStateChanged();
     for (const int index : result.newlyTooSlow)
         reportTooSlow(m_patternTabs.at(index));
 }
@@ -338,6 +352,7 @@ void FilteredOutputPane::clearContents()
     for (const PatternTab &entry : std::as_const(m_patternTabs))
         entry.tab->reset();
     m_router.resetContinuations();
+    navigateStateChanged();
 }
 
 void FilteredOutputPane::setFocus()
@@ -356,23 +371,49 @@ bool FilteredOutputPane::canFocus() const
     return m_tabWidget && m_tabWidget->currentWidget();
 }
 
+// Next/previous item (F6 / Shift+F6) steps through the current tab's matches: in a pattern
+// tab its matching lines (not continuation lines), in All every line that matched a pattern.
 bool FilteredOutputPane::canNavigate() const
 {
-    return false;
+    return true;
 }
 
 bool FilteredOutputPane::canNext() const
 {
-    return false;
+    const OutputTabWidget *tab = currentTab();
+    return tab && tab->hasMatchStops();
 }
 
 bool FilteredOutputPane::canPrevious() const
 {
-    return false;
+    return canNext();
 }
 
-void FilteredOutputPane::goToNext() {}
+void FilteredOutputPane::goToNext()
+{
+    goToMatch(OutputTabWidget::Direction::Forward);
+}
 
-void FilteredOutputPane::goToPrev() {}
+void FilteredOutputPane::goToPrev()
+{
+    goToMatch(OutputTabWidget::Direction::Backward);
+}
+
+OutputTabWidget *FilteredOutputPane::currentTab() const
+{
+    return m_tabWidget ? qobject_cast<OutputTabWidget *>(m_tabWidget->currentWidget()) : nullptr;
+}
+
+void FilteredOutputPane::goToMatch(OutputTabWidget::Direction direction)
+{
+    OutputTabWidget *tab = currentTab();
+    if (!tab)
+        return;
+    const int lineId = tab->goToMatch(direction);
+    // Keep All at the same line, without switching to it: switching tabs afterwards shows
+    // the context, and stepping on in All continues from there.
+    if (lineId >= 0 && tab != m_allTab)
+        m_allTab->scrollToLine(lineId);
+}
 
 } // namespace MultiFilterOutput::Internal

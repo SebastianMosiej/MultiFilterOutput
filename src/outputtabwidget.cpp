@@ -178,6 +178,7 @@ void OutputTabWidget::reset()
     m_formatter.flush();
     m_formatter.clear();
     m_nextLineId = 0;
+    m_matchStops = 0;
     m_matchCount = 0;
     m_followTail = true;
     // Immediately, not coalesced: the label must not keep showing the old count until the

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "linerouter.h"
+#include "outputtabwidget.h"
 #include "pattern.h"
 #include "runtracker.h"
 
@@ -19,7 +20,6 @@ class RunControl;
 namespace MultiFilterOutput {
 class LineQueue;
 class OutputPaneTabWidget;
-class OutputTabWidget;
 }
 
 namespace MultiFilterOutput::Internal {
@@ -45,6 +45,9 @@ public:
 
 private:
     void rebuildTabs(ProjectExplorer::RunControl *activeRunControl);
+    OutputTabWidget *currentTab() const;
+    // Steps the current tab to its next/previous match and keeps All at the same line.
+    void goToMatch(OutputTabWidget::Direction direction);
     void onLineReceived(const QString &line, Utils::OutputFormat format);
     // Appends one line to "All" and to every pattern tab it belongs in; driven by
     // m_lineQueue, never directly from onLineReceived().

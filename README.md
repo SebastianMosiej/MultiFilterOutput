@@ -54,6 +54,11 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
 - **Find (Ctrl+F)** — search any tab (**All** or a pattern tab) with Qt
   Creator's usual Find toolbar, like in *Application Output*: find
   next/previous, case sensitivity, whole words, regular expressions.
+- **Next/previous match (F6 / Shift+F6)** — step through the current
+  tab's matches, wrapping around: a pattern tab's matching lines (skipping
+  continuation lines), or in **All** every line that matched a pattern.
+  Stepping in a pattern tab keeps **All** at the same line, so switching
+  to it shows the surrounding context.
 - **Click-to-jump** — click any line in a filtered tab to jump to and
   highlight that same line in **All**, recovering the surrounding context a
   filtered view strips away. Can be turned off from the Pattern Library

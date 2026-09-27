@@ -33,6 +33,7 @@ private slots:
     void goToMatchStepsThroughMarkedLinesAndWraps();
     void goToMatchWithoutMarksDoesNothing();
     void matchStopsSurviveTrimming();
+    void resetClearsMatchStops();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -330,6 +331,15 @@ void tst_OutputTabWidget::matchStopsSurviveTrimming()
     QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("match 18"));
     tab.goToMatch(OutputTabWidget::Direction::Backward);
     QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("match 16"));
+}
+
+// A new run or Clear empties the tab; F6 must not stay enabled for matches that are gone.
+void tst_OutputTabWidget::resetClearsMatchStops()
+{
+    OutputTabWidget tab;
+    appendMarked(tab, "match");
+    tab.reset();
+    QVERIFY(!tab.hasMatchStops());
 }
 
 QTEST_MAIN(tst_OutputTabWidget)
