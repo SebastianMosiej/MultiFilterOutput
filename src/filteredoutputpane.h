@@ -44,7 +44,7 @@ public:
 private:
     void rebuildTabs(ProjectExplorer::RunControl *activeRunControl);
     void onLineReceived(const QString &line, Utils::OutputFormat format);
-    void onJumpRequested(int sourceBlockNumber);
+    void onJumpRequested(int sourceLineId);
     void updateTabLabel(const Pattern &pattern, OutputTabWidget *tab, int count);
     // Matches the tab widget's pane background to OutputPaneTabBar's own painted background
     // (see outputpanetabbar.h) so nothing native shows through around the tab bar.

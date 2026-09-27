@@ -187,16 +187,17 @@ void FilteredOutputPane::updateTabLabel(const Pattern &pattern, OutputTabWidget 
         m_tabWidget->tabBar()->setTabTextColor(index, pattern.color);
 }
 
-void FilteredOutputPane::onJumpRequested(int sourceBlockNumber)
+void FilteredOutputPane::onJumpRequested(int sourceLineId)
 {
-    if (!m_tabWidget || !m_allTab || sourceBlockNumber < 0)
+    if (!m_tabWidget || !m_allTab || sourceLineId < 0)
         return;
     if (!outputPaneSettings().jumpToAllOnClick())
         return;
     // Switching to the "All" tab is half the point: scrolling a tab the user cannot see
-    // looks like nothing happened at all.
-    m_tabWidget->setCurrentWidget(m_allTab);
-    m_allTab->scrollToBlock(sourceBlockNumber);
+    // looks like nothing happened at all. But a line "All" has already trimmed off its front
+    // has nothing to show, so stay put rather than switch to an unrelated position.
+    if (m_allTab->scrollToLine(sourceLineId))
+        m_tabWidget->setCurrentWidget(m_allTab);
 }
 
 void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat format)
@@ -214,14 +215,14 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
             popup(Core::IOutputPane::NoModeSwitch | Core::IOutputPane::WithFocus);
     }
 
-    // The "All" tab is the jump target, so its block number for this line is what every
-    // matching pattern tab must record -- not each tab's own (identity) block index.
-    const int allBlock = m_allTab->appendLine(line, format);
+    // The "All" tab is the jump target, so its line id for this line is what every matching
+    // pattern tab must record -- not an id of each tab's own.
+    const int allLine = m_allTab->appendLine(line, format);
 
     for (PatternTab &entry : m_patternTabs) {
         if (entry.inContinuation) {
             if (lineContinuesPattern(entry.pattern, line)) {
-                entry.tab->appendLine(line, format, allBlock, /*countsAsMatch=*/false);
+                entry.tab->appendLine(line, format, allLine, /*countsAsMatch=*/false);
                 continue;
             }
             // This line breaks the continuation run; fall through and re-check it as an
@@ -229,7 +230,7 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
             entry.inContinuation = false;
         }
         if (lineMatches(entry.pattern, line)) {
-            entry.tab->appendLine(line, format, allBlock);
+            entry.tab->appendLine(line, format, allLine);
             entry.inContinuation = entry.pattern.groupContinuationLines
                                     && !entry.pattern.continuationPattern.isEmpty();
         }
