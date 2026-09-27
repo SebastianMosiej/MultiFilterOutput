@@ -23,6 +23,8 @@ private slots:
     void capAppliesAcrossChunks();
     void longCompleteLineIsSplitToo();
     void capNeverSplitsSurrogatePair();
+    void capKeepsTrailingCarriageReturnsPending();
+    void capAtExactLengthThenSplitCrLf();
     void splitterKeepsInterleavedFormatsApart();
     void splitterFlushReturnsEveryFormatsPendingLine();
 };
@@ -143,6 +145,24 @@ void tst_LineBuffer::capNeverSplitsSurrogatePair()
     QCOMPARE(
         buf.feed(text + "\n"),
         (QStringList{"abc", QString::fromUcs4(U"\U0001F600") + "de"}));
+}
+
+// The cap must not force out a pending line just because its trailing "\r"s -- possibly half
+// of a "\r\n" -- push it over the limit; they aren't content.
+void tst_LineBuffer::capKeepsTrailingCarriageReturnsPending()
+{
+    LineBuffer buf(10);
+    QVERIFY(buf.feed("abcdefghij\r\r").isEmpty());
+    QCOMPARE(buf.feed("\n"), QStringList{"abcdefghij"});
+}
+
+// Exactly cap-length content whose "\r\n" is split across chunks is one line, not the line
+// plus a spurious empty one.
+void tst_LineBuffer::capAtExactLengthThenSplitCrLf()
+{
+    LineBuffer buf(10);
+    QVERIFY(buf.feed("abcdefghij\r").isEmpty());
+    QCOMPARE(buf.feed("\n"), QStringList{"abcdefghij"});
 }
 
 // A stdout fragment still waiting for its newline must not be glued onto a stderr line that

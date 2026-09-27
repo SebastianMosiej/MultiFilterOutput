@@ -76,9 +76,16 @@ QStringList LineBuffer::feed(const QString &chunk)
         lines.append(part);
     }
     applyCarriageReturnsToPartial(m_partial);
-    // Only ever leaves a non-empty remainder behind, so a trailing "\r" -- possibly the first
-    // half of a "\r\n" split across chunks -- always stays pending rather than being emitted.
-    takeCappedPieces(m_partial, m_maxLineLength, lines);
+    // Cap only the content, not a trailing run of "\r"s -- possibly the first half of a "\r\n"
+    // split across chunks. Those stay pending as they are: counting them would force out
+    // cap-length content (followed by a spurious empty line once the "\n" arrives), and a
+    // piece could end in a "\r" that never went through applyCarriageReturns().
+    qsizetype contentEnd = m_partial.size();
+    while (contentEnd > 0 && m_partial.at(contentEnd - 1) == '\r')
+        --contentEnd;
+    QString content = m_partial.left(contentEnd);
+    takeCappedPieces(content, m_maxLineLength, lines);
+    m_partial = content + m_partial.mid(contentEnd);
     return lines;
 }
 
