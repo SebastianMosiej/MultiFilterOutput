@@ -13,6 +13,10 @@
 # official Qt Creator packages' Utils links (their CMake package fails to configure without
 # it) -- a self-built Qt Creator bundles its own copy instead.
 
+# Script mode (-P) starts with pre-3.0 policy defaults; without this, IN_LIST below is not
+# an operator and the script fails. 3.22: the same minimum as the project.
+cmake_minimum_required(VERSION 3.22)
+
 foreach(var QT_VERSION PLATFORM DEST)
   if(NOT DEFINED ${var})
     message(FATAL_ERROR "${var} is required")
