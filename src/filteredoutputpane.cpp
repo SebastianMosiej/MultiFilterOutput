@@ -144,6 +144,7 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
         entry.tab->deleteLater();
     }
     m_patternTabs.clear();
+    m_router = LineRouter();
     // Lines still queued belong to the run being replaced (or to the tab set being torn
     // down); they must not land in the fresh tabs.
     m_lineQueue->clear();
@@ -173,7 +174,11 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     // Library order, not enabledIds order: the latter is just the order the boxes were
     // ticked in, while the library's is the one the user deliberately arranges. Patterns
     // deleted since the selection was saved are skipped silently.
-    for (const Pattern &pattern : patternLibrary().patternsWithIds(enabledIds)) {
+    const QList<Pattern> patterns = patternLibrary().patternsWithIds(enabledIds);
+    // Fresh per run: continuation state and slow-pattern breakers start over. Its pattern
+    // indexes are m_patternTabs' indexes.
+    m_router = LineRouter(patterns);
+    for (const Pattern &pattern : patterns) {
         auto *tab = new OutputTabWidget(m_tabWidget);
         tab->setLinkParser(project);
         tab->setFontZoom(m_fontZoom);
@@ -233,7 +238,7 @@ void FilteredOutputPane::updateTabLabel(const Pattern &pattern, OutputTabWidget 
         m_patternTabs.cbegin(), m_patternTabs.cend(), [tab](const PatternTab &e) {
             return e.tab == tab;
         });
-    const bool tooSlow = entry != m_patternTabs.cend() && entry->breaker.isTripped();
+    const bool tooSlow = m_router.isTooSlow(int(entry - m_patternTabs.cbegin()));
     applyTabLabel(m_tabWidget->tabBar(), index, pattern, count, tooSlow);
 }
 
@@ -281,34 +286,13 @@ void FilteredOutputPane::processLine(const QString &line, Utils::OutputFormat fo
     // pattern tab must record -- not an id of each tab's own.
     const int allLine = m_allTab->appendLine(line, format);
 
-    for (PatternTab &entry : m_patternTabs) {
-        if (entry.breaker.isTripped())
-            continue;
-        matchIntoTab(entry, line, format, allLine);
-        if (entry.breaker.isTripped())
-            reportTooSlow(entry);
+    const LineRouter::Result result = m_router.route(line);
+    for (const LineRouter::Route &route : result.routes) {
+        m_patternTabs.at(route.patternIndex)
+            .tab->appendLine(line, format, allLine, route.countsAsMatch);
     }
-}
-
-void FilteredOutputPane::matchIntoTab(
-    PatternTab &entry, const QString &line, Utils::OutputFormat format, int allLine)
-{
-    // Both regexes -- the main one and the continuation one -- go through the breaker; either
-    // can be the pathological one.
-    if (entry.inContinuation) {
-        if (entry.breaker.run([&] { return lineContinuesPattern(entry.pattern, line); })) {
-            entry.tab->appendLine(line, format, allLine, /*countsAsMatch=*/false);
-            return;
-        }
-        // This line breaks the continuation run; fall through and re-check it as an
-        // ordinary candidate match below, same as any other line.
-        entry.inContinuation = false;
-    }
-    if (entry.breaker.run([&] { return lineMatches(entry.pattern, line); })) {
-        entry.tab->appendLine(line, format, allLine);
-        entry.inContinuation = entry.pattern.groupContinuationLines
-                               && !entry.pattern.continuationPattern.isEmpty();
-    }
+    for (const int index : result.newlyTooSlow)
+        reportTooSlow(m_patternTabs.at(index));
 }
 
 void FilteredOutputPane::reportTooSlow(const PatternTab &entry)
@@ -326,10 +310,9 @@ void FilteredOutputPane::clearContents()
     m_lineQueue->clear();
     if (m_allTab)
         m_allTab->reset();
-    for (PatternTab &entry : m_patternTabs) {
+    for (const PatternTab &entry : std::as_const(m_patternTabs))
         entry.tab->reset();
-        entry.inContinuation = false;
-    }
+    m_router.resetContinuations();
 }
 
 void FilteredOutputPane::setFocus()

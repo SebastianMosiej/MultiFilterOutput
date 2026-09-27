@@ -1,6 +1,6 @@
 #pragma once
 
-#include "linematcher.h"
+#include "linerouter.h"
 #include "pattern.h"
 #include "runtracker.h"
 
@@ -66,22 +66,10 @@ private:
     {
         Pattern pattern;
         OutputTabWidget *tab;
-        // True while lines are being swept in as continuations of this pattern's last match
-        // (see Pattern::groupContinuationLines); cleared by the first line that doesn't
-        // match pattern.continuationPattern.
-        bool inContinuation = false;
-        // Stops evaluating this pattern for the rest of the run once its matching has proven
-        // pathologically slow (see SlowMatchBreaker); fresh for every run, since the tabs --
-        // and so these entries -- are rebuilt per run.
-        SlowMatchBreaker breaker = SlowMatchBreaker();
     };
 
-    // Runs one pattern's matching for one line (continuation first, then the main pattern)
-    // and appends the line to its tab if it belongs there.
-    void matchIntoTab(
-        PatternTab &entry, const QString &line, Utils::OutputFormat format, int allLine);
-    // Called once, when entry's breaker trips: relabels the tab and says why in General
-    // Messages.
+    // Called once, when entry's pattern trips its slow-match breaker in m_router: relabels
+    // the tab and says why in General Messages.
     void reportTooSlow(const PatternTab &entry);
 
     RunTracker *m_runTracker;
@@ -90,6 +78,8 @@ private:
     OutputPaneTabWidget *m_tabWidget = nullptr;
     OutputTabWidget *m_allTab = nullptr;
     QList<PatternTab> m_patternTabs;
+    // Which of m_patternTabs each line goes to (same indexes); rebuilt with them per run.
+    LineRouter m_router;
     QLabel *m_runLabel = nullptr;
     // The active run's applicationProcessHandleChanged -> updateRunLabel() connection.
     QMetaObject::Connection m_pidConnection;

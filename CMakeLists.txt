@@ -43,6 +43,8 @@ add_qtc_plugin(MultiFilterOutput
     src/linebuffer.cpp
     src/linequeue.h
     src/linequeue.cpp
+    src/linerouter.h
+    src/linerouter.cpp
     src/patternlibrary.h
     src/patternlibrary.cpp
     src/patternlibrarysettingspage.h
@@ -115,6 +117,10 @@ if(WITH_TESTS)
     SOURCES tests/tst_linequeue.cpp
     DEPENDS MultiFilterOutput
   )
+  add_qtc_test(tst_linerouter
+    SOURCES tests/tst_linerouter.cpp
+    DEPENDS MultiFilterOutput
+  )
 
   # add_qtc_test() bakes a fixed PATH into each test's ENVIRONMENT property (see
   # finalize_test_setup() in QtCreatorAPIInternal.cmake). That PATH covers this project's
@@ -140,6 +146,7 @@ if(WITH_TESTS)
       tst_tablabel
       tst_outputtabwidget
       tst_linequeue
+      tst_linerouter
       PROPERTIES ENVIRONMENT_MODIFICATION "${QtCreatorPathModification}"
     )
   endif()
