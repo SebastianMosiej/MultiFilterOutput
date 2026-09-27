@@ -1,0 +1,101 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # Qt Creator 21 and 22 are both built with Qt 6.11 (see QT_VERSION in their own
+  # .github/workflows/build_cmake.yml). The plugin has to be built against that Qt (or an older
+  # 6.x), and the tests load Qt Creator's libraries, which need it at runtime.
+  QT_VERSION: 6.11.0
+  CMAKE_VERSION: 3.30.3
+  NINJA_VERSION: 1.12.1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: ${{ matrix.os.name }} / Qt Creator ${{ matrix.qtc.version }}
+    runs-on: ${{ matrix.os.runner }}
+    # The next Qt Creator version is an early warning of API changes, not a gate.
+    continue-on-error: ${{ matrix.qtc.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - { name: Windows MSVC, runner: windows-latest, platform: windows_x64 }
+          - { name: Linux GCC, runner: ubuntu-latest, platform: linux_x64 }
+        qtc:
+          # The version the plugin targets (plugin API 20.0.82) -- see README "Requirements".
+          # Pre-releases are only published under download.qt.io/snapshots, which
+          # install-dev-package falls back to.
+          - { version: 21.0.0-beta1, experimental: false }
+          # The next one, to catch Qt Creator API breaks before they land.
+          - { version: 22.0.0-beta1, experimental: true }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CMake and Ninja
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: ${{ env.CMAKE_VERSION }}
+          ninjaVersion: ${{ env.NINJA_VERSION }}
+
+      - name: Install system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libegl1 libxkbcommon0 libfontconfig1
+
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Download Qt
+        run: >
+          cmake -DQT_VERSION=${{ env.QT_VERSION }} -DPLATFORM=${{ matrix.os.platform }}
+          "-DDEST=${{ github.workspace }}/qt" -P .github/scripts/download_qt.cmake
+
+      - name: Download Qt Creator
+        id: qtc
+        uses: qt-creator/install-dev-package@v2.2
+        with:
+          version: ${{ matrix.qtc.version }}
+          unzip-to: qtcreator
+          platform: ${{ matrix.os.platform }}
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_TESTS=ON
+          "-DCMAKE_PREFIX_PATH=${{ steps.qtc.outputs.path }};${{ github.workspace }}/qt"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        env:
+          # No display on CI runners.
+          QT_QPA_PLATFORM: offscreen
+          # With the official Qt Creator libraries loaded, Qt no longer finds its plugins
+          # next to its own libraries (it reports the platform plugin missing "in ''" and
+          # aborts, in every test that creates a QApplication) -- so point it at them.
+          QT_PLUGIN_PATH: ${{ github.workspace }}/qt/plugins
+          # On Windows, CMakeLists.txt puts Qt Creator's libraries on each test's PATH; on
+          # Linux they have to be found through the loader path instead.
+          LD_LIBRARY_PATH: >-
+            ${{ steps.qtc.outputs.path }}/lib/qtcreator:${{ steps.qtc.outputs.path }}/lib/qtcreator/plugins:${{ github.workspace }}/qt/lib
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Upload plugin
+        if: ${{ !matrix.qtc.experimental }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: MultiFilterOutput-qtc${{ matrix.qtc.version }}-${{ matrix.os.platform }}
+          path: |
+            build/lib/qtcreator/plugins/*MultiFilterOutput*
+          if-no-files-found: error

@@ -91,11 +91,16 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   Creator 20 or earlier: out-of-tree plugins are tied to the exact
   `Core`/`ProjectExplorer`/`TextEditor` API version they compile against,
   and a mismatch is reported as an unresolved dependency on `core`.
-- A Qt Creator source/build tree of that version — an end-user Qt Creator
-  *installation* is not enough, since it ships no headers and no exported
-  `QtCreator` CMake package.
-- Qt 6 (Widgets module), matching the Qt version that Qt Creator tree was
-  itself built with.
+- Headers and the exported `QtCreator` CMake package for that version —
+  an end-user Qt Creator *installation* alone is not enough. Either:
+  - a Qt Creator source/build tree of that version, or
+  - the official development packages: `qtcreator.7z` and
+    `qtcreator_dev.7z` from `download.qt.io` (pre-releases live under
+    `snapshots/qtcreator/21.0/21.0.0-beta1/installer_source/latest/<platform>/`),
+    extracted into one directory. This is what CI builds against.
+- Qt 6 (Widgets module), matching the Qt version that Qt Creator was itself
+  built with — 6.11 for the official Qt Creator 21 packages, which also need
+  the `qttasktree` module (their `Utils` links `Qt6::TaskTree`).
 - CMake 3.16+, or 3.22+ to build the unit tests (they rely on the
   `ENVIRONMENT_MODIFICATION` test property).
 - A C++20 compiler (tested with MSVC 2022 on Windows).
@@ -118,6 +123,22 @@ To launch Qt Creator with the freshly-built plugin loaded, build the
 generated `RunQtCreator` target (available whenever CMake can locate a
 `qtcreator` executable next to the `QtCreator::Core` package it configured
 against).
+
+### Continuous integration
+
+`.github/workflows/build.yml` builds the plugin and runs the unit tests on
+every push and pull request, on Windows (MSVC) and Linux (GCC), against the
+official Qt Creator development packages (`qt-creator/install-dev-package`)
+and Qt 6.11 (downloaded by `.github/scripts/download_qt.cmake`):
+
+- **Qt Creator 21.0.0-beta1** — the version the plugin targets; must pass.
+  The built plugin is uploaded as an artifact.
+- **Qt Creator 22.0.0-beta1** — the next version, allowed to fail: an early
+  warning when Qt Creator's API changes under the plugin.
+
+To move to a new Qt Creator version, update the `qtc` entries in the matrix,
+and `QT_VERSION` to whatever that Qt Creator is built with (see `QT_VERSION`
+in Qt Creator's own `.github/workflows/build_cmake.yml`).
 
 ## Installing and enabling the plugin
 
