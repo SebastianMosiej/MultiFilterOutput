@@ -23,6 +23,8 @@
 #include <QTabBar>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 using namespace ProjectExplorer;
 
 namespace MultiFilterOutput::Internal {
