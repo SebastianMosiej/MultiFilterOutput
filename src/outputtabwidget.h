@@ -68,6 +68,13 @@ public:
     qreal fontZoom() const;
     void setFontZoom(qreal zoom);
 
+    // Lines longer than this many characters are shown cut short, followed by a note saying
+    // how much was left out -- QPlainTextEdit's layout cost grows steeply with block length,
+    // so one enormous line can stall the whole pane. Display only: what matched is decided
+    // on the full line before it gets here. 0 (the default) means no limit. Applies to lines
+    // appended from now on.
+    void setMaxLineLength(int maxLength);
+
 signals:
     // Coalesced: emitted once per event-loop pass however many matches were appended in it
     // (except from reset(), which emits 0 straight away).
@@ -89,6 +96,7 @@ private:
     Utils::OutputFormatter m_formatter;
     // The line id appendLine() gives the next line appended without a sourceLineId.
     int m_nextLineId = 0;
+    int m_maxLineLength = 0;
     QPoint m_pressPos;
     int m_matchCount = 0;
     QTimer m_matchCountTimer;

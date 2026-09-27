@@ -1,6 +1,7 @@
 #include "outputtabwidget.h"
 
 #include "multifilterlineparser.h"
+#include "multifilteroutputtr.h"
 
 #include <coreplugin/editormanager/editormanager.h>
 
@@ -16,6 +17,24 @@
 #include <QWheelEvent>
 
 namespace MultiFilterOutput {
+
+namespace {
+
+// `line` as shown in a tab with the given setMaxLineLength(): cut after maxLength characters
+// (one fewer rather than separate a surrogate pair) and followed by how much was left out.
+QString displayText(const QString &line, int maxLength)
+{
+    if (maxLength <= 0 || line.size() <= maxLength)
+        return line;
+    qsizetype cut = maxLength;
+    if (cut > 1 && line.at(cut - 1).isHighSurrogate())
+        --cut;
+    return Tr::tr("%1 ... [%2 more characters not shown]")
+        .arg(line.left(cut))
+        .arg(line.size() - cut);
+}
+
+} // namespace
 
 OutputTabWidget::OutputTabWidget(QWidget *parent)
     : QPlainTextEdit(parent)
@@ -75,7 +94,7 @@ int OutputTabWidget::appendLine(
 {
     const int lineId = sourceLineId >= 0 ? sourceLineId : m_nextLineId++;
 
-    m_formatter.appendMessage(line + "\n", format);
+    m_formatter.appendMessage(displayText(line, m_maxLineLength) + "\n", format);
     // appendMessage's trailing newline advances the cursor into a new, still-empty block, so
     // the block that actually holds the line just appended is the one before the last.
     // Nothing else sets userState on this document (there is no syntax highlighter), so it is
@@ -145,6 +164,11 @@ void OutputTabWidget::setBaseFont(const QFont &newFont)
 qreal OutputTabWidget::fontZoom() const
 {
     return font().pointSizeF() - m_baseFontSize;
+}
+
+void OutputTabWidget::setMaxLineLength(int maxLength)
+{
+    m_maxLineLength = maxLength;
 }
 
 void OutputTabWidget::setFontZoom(qreal zoom)

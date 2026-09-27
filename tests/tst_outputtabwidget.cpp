@@ -15,6 +15,11 @@ private slots:
     void matchCountChangedIsCoalesced();
     void jumpToLineTrimmedFromAllTabFails();
     void clickMapsCorrectlyAfterPatternTabTrims();
+    void longLineIsTruncatedForDisplay();
+    void linesUpToLimitAreUntouched();
+    void zeroMaxLineLengthMeansNoLimit();
+    void truncationNeverSplitsSurrogatePair();
+    void truncatedLineStillJumps();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -119,6 +124,61 @@ void tst_OutputTabWidget::matchCountChangedIsCoalesced()
     QCOMPARE(spy.first().first().toInt(), 100);
     QTest::qWait(20);
     QCOMPARE(spy.size(), 1);
+}
+
+static QString lastLineText(const OutputTabWidget &tab)
+{
+    return tab.document()->lastBlock().previous().text();
+}
+
+void tst_OutputTabWidget::longLineIsTruncatedForDisplay()
+{
+    OutputTabWidget tab;
+    tab.setMaxLineLength(10);
+    tab.appendLine("abcdefghijklmnopqrstuvwxy", Utils::StdOutFormat);
+    QCOMPARE(lastLineText(tab), QStringLiteral("abcdefghij ... [15 more characters not shown]"));
+}
+
+void tst_OutputTabWidget::linesUpToLimitAreUntouched()
+{
+    OutputTabWidget tab;
+    tab.setMaxLineLength(10);
+    tab.appendLine("short", Utils::StdOutFormat);
+    QCOMPARE(lastLineText(tab), QStringLiteral("short"));
+    tab.appendLine("abcdefghij", Utils::StdOutFormat);
+    QCOMPARE(lastLineText(tab), QStringLiteral("abcdefghij"));
+}
+
+void tst_OutputTabWidget::zeroMaxLineLengthMeansNoLimit()
+{
+    OutputTabWidget tab;
+    tab.setMaxLineLength(0);
+    const QString line(100000, 'x');
+    tab.appendLine(line, Utils::StdOutFormat);
+    QCOMPARE(lastLineText(tab), line);
+}
+
+void tst_OutputTabWidget::truncationNeverSplitsSurrogatePair()
+{
+    OutputTabWidget tab;
+    tab.setMaxLineLength(4);
+    // "abc" + U+1F600 (a surrogate pair) + "de": a cut after 4 UTF-16 units would split it.
+    tab.appendLine(QStringLiteral("abc") + QString::fromUcs4(U"\U0001F600") + "de", Utils::StdOutFormat);
+    QCOMPARE(lastLineText(tab), QStringLiteral("abc ... [4 more characters not shown]"));
+}
+
+// Truncation changes what a line displays, not which line it is: click-to-jump still maps a
+// truncated pattern-tab line back to its line in "All".
+void tst_OutputTabWidget::truncatedLineStillJumps()
+{
+    OutputTabWidget pattern;
+    pattern.setMaxLineLength(10);
+    pattern.resize(400, 200);
+    pattern.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&pattern));
+
+    pattern.appendLine(QString(50, 'x'), Utils::StdOutFormat, 42);
+    QCOMPARE(clickBlock(pattern, 0), 42);
 }
 
 QTEST_MAIN(tst_OutputTabWidget)
