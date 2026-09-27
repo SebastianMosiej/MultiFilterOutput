@@ -234,10 +234,7 @@ void FilteredOutputPane::updateTabLabel(const Pattern &pattern, OutputTabWidget 
             return e.tab == tab;
         });
     const bool tooSlow = entry != m_patternTabs.cend() && entry->breaker.isTripped();
-    m_tabWidget->setTabText(index, tabLabel(pattern, count, tooSlow));
-    // Pattern::color is user-editable and persisted; this is where it becomes visible.
-    if (pattern.color.isValid())
-        m_tabWidget->tabBar()->setTabTextColor(index, pattern.color);
+    applyTabLabel(m_tabWidget->tabBar(), index, pattern, count, tooSlow);
 }
 
 void FilteredOutputPane::onJumpRequested(int sourceLineId)

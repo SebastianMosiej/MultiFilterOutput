@@ -1,5 +1,6 @@
 #include "../src/tablabel.h"
 
+#include <QTabBar>
 #include <QtTest>
 
 using namespace MultiFilterOutput;
@@ -15,6 +16,9 @@ private slots:
     void tooSlowPatternIsMarked();
     void runLabelShowsKnownPid();
     void runLabelOmitsUnknownPid();
+    void applyTabLabelSetsTextAndColor();
+    void applyTabLabelClearsColorWhenPatternHasNone();
+    void applyTabLabelMarksTooSlow();
 };
 
 void tst_TabLabel::normalPatternShowsNameAndCount()
@@ -59,6 +63,50 @@ void tst_TabLabel::runLabelOmitsUnknownPid()
     QCOMPARE(runLabel("MyApp", 0), QStringLiteral("Filtering: MyApp"));
 }
 
-QTEST_GUILESS_MAIN(tst_TabLabel)
+void tst_TabLabel::applyTabLabelSetsTextAndColor()
+{
+    QTabBar bar;
+    bar.addTab(QString());
+    Pattern p;
+    p.name = "Errors";
+    p.color = Qt::red;
+
+    applyTabLabel(&bar, 0, p, 3);
+
+    QCOMPARE(bar.tabText(0), QStringLiteral("Errors (3)"));
+    QCOMPARE(bar.tabTextColor(0), QColor(Qt::red));
+}
+
+// A pattern whose color was removed must not keep showing the old tint.
+void tst_TabLabel::applyTabLabelClearsColorWhenPatternHasNone()
+{
+    QTabBar bar;
+    bar.addTab(QString());
+    Pattern p;
+    p.name = "Errors";
+    p.color = Qt::red;
+    applyTabLabel(&bar, 0, p, 3);
+
+    p.color = QColor();
+    applyTabLabel(&bar, 0, p, 3);
+
+    QVERIFY(!bar.tabTextColor(0).isValid());
+}
+
+// The pane relabels through applyTabLabel(), so a tripped SlowMatchBreaker has to reach the
+// tab text through it too.
+void tst_TabLabel::applyTabLabelMarksTooSlow()
+{
+    QTabBar bar;
+    bar.addTab(QString());
+    Pattern p;
+    p.name = "Errors";
+
+    applyTabLabel(&bar, 0, p, 12, /*tooSlow=*/true);
+
+    QCOMPARE(bar.tabText(0), QStringLiteral("Errors (12) - disabled: too slow"));
+}
+
+QTEST_MAIN(tst_TabLabel)
 
 #include "tst_tablabel.moc"

@@ -2,6 +2,8 @@
 
 #include "multifilteroutputtr.h"
 
+#include <QTabBar>
+
 namespace MultiFilterOutput {
 
 QString tabLabel(const Pattern &pattern, int matchCount, bool tooSlow)
@@ -17,6 +19,16 @@ QString runLabel(const QString &runName, qint64 pid)
     if (pid <= 0)
         return Tr::tr("Filtering: %1").arg(runName);
     return Tr::tr("Filtering: %1 (pid %2)").arg(runName).arg(pid);
+}
+
+void applyTabLabel(
+    QTabBar *tabBar, int index, const Pattern &pattern, int matchCount, bool tooSlow)
+{
+    tabBar->setTabText(index, tabLabel(pattern, matchCount, tooSlow));
+    // Pattern::color is user-editable and persisted; this is where it becomes visible. Set
+    // unconditionally: an invalid color is how OutputPaneTabBar knows to fall back to its
+    // default text color, so skipping it would leave any previous tint in place.
+    tabBar->setTabTextColor(index, pattern.color);
 }
 
 } // namespace MultiFilterOutput
