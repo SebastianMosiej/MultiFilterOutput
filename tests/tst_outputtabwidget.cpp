@@ -12,6 +12,7 @@ class tst_OutputTabWidget : public QObject
 
 private slots:
     void jumpLandsOnMirroredLineAfterAllTabTrims();
+    void matchCountChangedIsCoalesced();
     void jumpToLineTrimmedFromAllTabFails();
     void clickMapsCorrectlyAfterPatternTabTrims();
 
@@ -100,6 +101,24 @@ void tst_OutputTabWidget::clickMapsCorrectlyAfterPatternTabTrims()
             QStringLiteral("match %1").arg(expectedMatch));
         QCOMPARE(clickBlock(pattern, block), 100 + expectedMatch * 10);
     }
+}
+
+// Every matchCountChanged() relabels a tab, which relayouts the whole tab bar; a burst of
+// appended lines must cost one relabel, not one per line.
+void tst_OutputTabWidget::matchCountChangedIsCoalesced()
+{
+    OutputTabWidget tab;
+    QSignalSpy spy(&tab, &OutputTabWidget::matchCountChanged);
+
+    for (int i = 0; i < 100; ++i)
+        tab.appendLine(QStringLiteral("line %1").arg(i), Utils::StdOutFormat);
+    tab.appendLine("continuation", Utils::StdOutFormat, -1, /*countsAsMatch=*/false);
+    QCOMPARE(tab.matchCount(), 100);
+
+    QTRY_COMPARE(spy.size(), 1);
+    QCOMPARE(spy.first().first().toInt(), 100);
+    QTest::qWait(20);
+    QCOMPARE(spy.size(), 1);
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

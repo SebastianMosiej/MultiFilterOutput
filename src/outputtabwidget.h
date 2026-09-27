@@ -6,6 +6,7 @@
 
 #include <QPlainTextEdit>
 #include <QPoint>
+#include <QTimer>
 
 QT_BEGIN_NAMESPACE
 class QWheelEvent;
@@ -68,6 +69,8 @@ public:
     void setFontZoom(qreal zoom);
 
 signals:
+    // Coalesced: emitted once per event-loop pass however many matches were appended in it
+    // (except from reset(), which emits 0 straight away).
     void matchCountChanged(int count);
     // Emitted on a click that isn't a linkified reference; sourceLineId is the line id this
     // tab recorded for the clicked line, or -1 if there is none.
@@ -88,6 +91,7 @@ private:
     int m_nextLineId = 0;
     QPoint m_pressPos;
     int m_matchCount = 0;
+    QTimer m_matchCountTimer;
     // The point size setBaseFont() was last given, i.e. the size fontZoom() is relative to.
     qreal m_baseFontSize = 0;
     // Whether the view sticks to the end of the log as lines arrive: true while the vertical

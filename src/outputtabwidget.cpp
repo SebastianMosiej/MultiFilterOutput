@@ -22,6 +22,14 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
 {
     setReadOnly(true);
     setMaximumBlockCount(50000);
+
+    // Coalesces matchCountChanged(): appendLine() only starts this zero-interval timer, so a
+    // burst of matches appended within one event-loop pass costs a single tab relabel.
+    m_matchCountTimer.setSingleShot(true);
+    m_matchCountTimer.setInterval(0);
+    connect(&m_matchCountTimer, &QTimer::timeout, this, [this] {
+        emit matchCountChanged(m_matchCount);
+    });
     m_formatter.setPlainTextEdit(this);
 
     // Match Application Output's font, including live updates when the user changes it in
@@ -76,7 +84,8 @@ int OutputTabWidget::appendLine(
 
     if (countsAsMatch) {
         ++m_matchCount;
-        emit matchCountChanged(m_matchCount);
+        if (!m_matchCountTimer.isActive())
+            m_matchCountTimer.start();
     }
     return lineId;
 }
@@ -98,6 +107,9 @@ void OutputTabWidget::reset()
     m_nextLineId = 0;
     m_matchCount = 0;
     m_followTail = true;
+    // Immediately, not coalesced: the label must not keep showing the old count until the
+    // next event-loop pass -- and a still-pending coalesced emission is now stale.
+    m_matchCountTimer.stop();
     emit matchCountChanged(m_matchCount);
 }
 
