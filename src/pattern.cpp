@@ -4,6 +4,23 @@
 
 namespace MultiFilterOutput {
 
+Pattern::Channel Pattern::channelOf(Utils::OutputFormat format)
+{
+    switch (format) {
+    case Utils::StdOutFormat:
+        return StdOutChannel;
+    case Utils::StdErrFormat:
+        return StdErrChannel;
+    default:
+        return MessagesChannel;
+    }
+}
+
+bool Pattern::looksAt(Utils::OutputFormat format) const
+{
+    return channels.testFlag(channelOf(format));
+}
+
 Pattern Pattern::createNew()
 {
     Pattern p;
@@ -25,6 +42,7 @@ QVariantMap Pattern::toMap() const
         {"groupContinuationLines", groupContinuationLines},
         {"continuationPattern", continuationPattern},
         {"isDefault", isDefault},
+        {"channels", int(channels.toInt())},
     };
 }
 
@@ -43,6 +61,11 @@ Pattern Pattern::fromMap(const QVariantMap &map)
     p.groupContinuationLines = map.value("groupContinuationLines", false).toBool();
     p.continuationPattern = map.value("continuationPattern", QStringLiteral("^ {1,3}")).toString();
     p.isDefault = map.value("isDefault", false).toBool();
+    // Absent in settings from before channels existed; none at all (or only unknown bits)
+    // would make a pattern that can never match. Either way: all channels.
+    const Channels channels
+        = Channels::fromInt(map.value("channels", int(AllChannels)).toInt()) & AllChannels;
+    p.channels = channels ? channels : Channels(AllChannels);
     return p;
 }
 

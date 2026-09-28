@@ -9,13 +9,13 @@ LineRouter::LineRouter(const QList<Pattern> &patterns, std::chrono::milliseconds
         m_states.append({pattern, false, SlowMatchBreaker(slowThreshold)});
 }
 
-LineRouter::Result LineRouter::route(const QString &line)
+LineRouter::Result LineRouter::route(const QString &line, Utils::OutputFormat format)
 {
     Result result;
     for (int i = 0; i < m_states.size(); ++i) {
         if (m_states.at(i).breaker.isTripped())
             continue;
-        routeOne(i, line, result.routes);
+        routeOne(i, line, format, result.routes);
         if (m_states.at(i).breaker.isTripped())
             result.newlyTooSlow.append(i);
     }
@@ -28,9 +28,14 @@ LineRouter::Result LineRouter::route(const QString &line)
     return result;
 }
 
-void LineRouter::routeOne(int index, const QString &line, QList<Route> &routes)
+void LineRouter::routeOne(
+    int index, const QString &line, Utils::OutputFormat format, QList<Route> &routes)
 {
     PatternState &state = m_states[index];
+    // Another channel's line is invisible to this pattern -- it doesn't even end a
+    // continuation run, so interleaved stdout can't cut a stderr stack trace short.
+    if (!state.pattern.looksAt(format))
+        return;
     // Both regexes -- the main one and the continuation one -- go through the breaker; either
     // can be the pathological one.
     if (state.inContinuation) {

@@ -14,6 +14,9 @@ private slots:
     void continuationFieldsDefaultAndRoundTrip();
     void isDefaultDefaultsFalseAndRoundTrips();
     void grayRoundTripsLikeAnyOtherColor();
+    void channelsDefaultToAllAndRoundTrip();
+    void channelOfSortsFormats();
+    void looksAtOnlyItsChannels();
 };
 
 void tst_Pattern::roundTripsThroughMap()
@@ -82,5 +85,41 @@ void tst_Pattern::grayRoundTripsLikeAnyOtherColor()
 }
 
 QTEST_GUILESS_MAIN(tst_Pattern)
+
+void tst_Pattern::channelsDefaultToAllAndRoundTrip()
+{
+    QCOMPARE(Pattern().channels, Pattern::Channels(Pattern::AllChannels));
+    // Settings from before channels existed.
+    QCOMPARE(Pattern::fromMap({{"id", "x"}}).channels, Pattern::Channels(Pattern::AllChannels));
+
+    Pattern p;
+    p.channels = Pattern::StdErrChannel | Pattern::MessagesChannel;
+    QCOMPARE(Pattern::fromMap(p.toMap()).channels, p.channels);
+
+    // No channel at all would make a pattern that can never match: read as all.
+    p.channels = {};
+    QCOMPARE(Pattern::fromMap(p.toMap()).channels, Pattern::Channels(Pattern::AllChannels));
+}
+
+void tst_Pattern::channelOfSortsFormats()
+{
+    QCOMPARE(Pattern::channelOf(Utils::StdOutFormat), Pattern::StdOutChannel);
+    QCOMPARE(Pattern::channelOf(Utils::StdErrFormat), Pattern::StdErrChannel);
+    for (Utils::OutputFormat format :
+         {Utils::NormalMessageFormat, Utils::ErrorMessageFormat, Utils::LogMessageFormat,
+          Utils::DebugFormat, Utils::GeneralMessageFormat}) {
+        QCOMPARE(Pattern::channelOf(format), Pattern::MessagesChannel);
+    }
+}
+
+void tst_Pattern::looksAtOnlyItsChannels()
+{
+    Pattern p;
+    QVERIFY(p.looksAt(Utils::StdErrFormat));
+    p.channels = Pattern::StdOutChannel;
+    QVERIFY(p.looksAt(Utils::StdOutFormat));
+    QVERIFY(!p.looksAt(Utils::StdErrFormat));
+    QVERIFY(!p.looksAt(Utils::NormalMessageFormat));
+}
 
 #include "tst_pattern.moc"

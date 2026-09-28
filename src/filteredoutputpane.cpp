@@ -789,7 +789,7 @@ bool FilteredOutputPane::routeToPatternTabs(
     bool allLineIsLast,
     qint64 timestamp)
 {
-    const LineRouter::Result result = m_router.route(line);
+    const LineRouter::Result result = m_router.route(line, format);
     const bool highlightInAll = allLineIsLast && outputPaneSettings().highlightMatchesInAll();
     bool matchedAnyPattern = false;
     for (const LineRouter::Route &route : result.routes) {

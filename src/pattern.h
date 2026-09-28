@@ -2,7 +2,10 @@
 
 #include "multifilteroutput_global.h"
 
+#include <utils/outputformat.h>
+
 #include <QColor>
+#include <QFlags>
 #include <QString>
 #include <QVariantMap>
 
@@ -30,9 +33,27 @@ public:
     // configuration (not for ones already saved -- see FilterSetAspect::FilterSetAspect()).
     bool isDefault = false;
 
+    // Which output a pattern looks at. A line from any other channel is invisible to it: not
+    // matched, not swept in as a continuation line, and not ending a continuation run.
+    enum Channel {
+        StdOutChannel = 0x1,
+        StdErrChannel = 0x2,
+        // Qt Creator's own lines: "Starting ...", "... exited with code 0", debugger and
+        // other messages -- every Utils::OutputFormat except the application's stdout/stderr.
+        MessagesChannel = 0x4,
+        AllChannels = StdOutChannel | StdErrChannel | MessagesChannel,
+    };
+    Q_DECLARE_FLAGS(Channels, Channel)
+    Channels channels = AllChannels;
+
+    static Channel channelOf(Utils::OutputFormat format);
+    bool looksAt(Utils::OutputFormat format) const;
+
     static Pattern createNew();
     QVariantMap toMap() const;
     static Pattern fromMap(const QVariantMap &map);
 };
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(Pattern::Channels)
 
 } // namespace MultiFilterOutput

@@ -42,7 +42,8 @@ public:
         const QList<Pattern> &patterns = {},
         std::chrono::milliseconds slowThreshold = std::chrono::milliseconds(10));
 
-    Result route(const QString &line);
+    // `format` says which channel the line came from (see Pattern::channels).
+    Result route(const QString &line, Utils::OutputFormat format);
 
     bool isTooSlow(int patternIndex) const;
 
@@ -60,7 +61,8 @@ private:
 
     // One pattern's verdict for one line (continuation first, then the pattern itself);
     // appends to `routes` if the line belongs in its tab.
-    void routeOne(int index, const QString &line, QList<Route> &routes);
+    void routeOne(
+        int index, const QString &line, Utils::OutputFormat format, QList<Route> &routes);
 
     QList<PatternState> m_states;
 };
