@@ -32,6 +32,9 @@ private slots:
     void regexCacheStaysWithinCapacity();
     void regexCacheKeepsCaseVariantsApart();
     void regexCacheDefaultHoldsLargeWorkingSet();
+    void matchSpansPlainTextEveryOccurrenceRespectingCase();
+    void matchSpansRegexSkipsZeroLengthMatches();
+    void matchSpansEmptyWhenNothingToHighlight();
 };
 
 void tst_LineMatcher::plainTextMatchCaseInsensitiveByDefault()
@@ -278,6 +281,52 @@ void tst_LineMatcher::regexCacheDefaultHoldsLargeWorkingSet()
     for (int i = 0; i < 300; ++i)
         cache.get(QStringLiteral("pattern%1").arg(i), true);
     QCOMPARE(cache.size(), 300);
+}
+
+using Spans = QList<MatchSpan>;
+
+void tst_LineMatcher::matchSpansPlainTextEveryOccurrenceRespectingCase()
+{
+    Pattern p;
+    p.isRegex = false;
+    p.patternText = "err";
+
+    QCOMPARE(matchSpans(p, "ERR: err and Err"), (Spans{{0, 3}, {5, 3}, {13, 3}}));
+    p.caseSensitive = true;
+    QCOMPARE(matchSpans(p, "ERR: err and Err"), (Spans{{5, 3}}));
+}
+
+void tst_LineMatcher::matchSpansRegexSkipsZeroLengthMatches()
+{
+    Pattern p;
+    p.isRegex = true;
+    p.patternText = "\\d+";
+    QCOMPARE(matchSpans(p, "a1 b22 c333"), (Spans{{1, 1}, {4, 2}, {8, 3}}));
+
+    p.patternText = "x*";
+    QCOMPARE(matchSpans(p, "axxb"), (Spans{{1, 2}}));
+    p.patternText = "^";
+    QCOMPARE(matchSpans(p, "anything"), Spans{});
+}
+
+// An inverted pattern's tab holds lines *without* its text: there is nothing in them to point
+// at. Nor is there for an invalid regex or empty text.
+void tst_LineMatcher::matchSpansEmptyWhenNothingToHighlight()
+{
+    Pattern inverted;
+    inverted.isRegex = false;
+    inverted.patternText = "DEBUG";
+    inverted.invert = true;
+    QCOMPARE(matchSpans(inverted, "DEBUG line"), Spans{});
+
+    Pattern invalid;
+    invalid.isRegex = true;
+    invalid.patternText = "([unterminated";
+    QCOMPARE(matchSpans(invalid, "([unterminated"), Spans{});
+
+    Pattern empty;
+    empty.isRegex = false;
+    QCOMPARE(matchSpans(empty, "text"), Spans{});
 }
 
 QTEST_GUILESS_MAIN(tst_LineMatcher)

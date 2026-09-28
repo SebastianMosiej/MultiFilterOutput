@@ -102,6 +102,32 @@ void SlowMatchBreaker::reset()
     m_strikes = 0;
 }
 
+QList<MatchSpan> matchSpans(const Pattern &pattern, const QString &line)
+{
+    QList<MatchSpan> spans;
+    if (pattern.invert || pattern.patternText.isEmpty())
+        return spans;
+    if (pattern.isRegex) {
+        const QRegularExpression &re = compiledRegex(pattern.patternText, pattern.caseSensitive);
+        if (!re.isValid())
+            return spans;
+        QRegularExpressionMatchIterator it = re.globalMatch(line);
+        while (it.hasNext()) {
+            const QRegularExpressionMatch m = it.next();
+            if (m.capturedLength() > 0)
+                spans.append({m.capturedStart(), m.capturedLength()});
+        }
+    } else {
+        const Qt::CaseSensitivity cs = pattern.caseSensitive ? Qt::CaseSensitive
+                                                             : Qt::CaseInsensitive;
+        for (qsizetype at = line.indexOf(pattern.patternText, 0, cs); at >= 0;
+             at = line.indexOf(pattern.patternText, at + pattern.patternText.size(), cs)) {
+            spans.append({at, pattern.patternText.size()});
+        }
+    }
+    return spans;
+}
+
 bool lineContinuesPattern(const Pattern &pattern, const QString &line)
 {
     if (!pattern.groupContinuationLines || pattern.continuationPattern.isEmpty())

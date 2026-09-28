@@ -3,6 +3,7 @@
 #include "multifilteroutput_global.h"
 
 #include <QHash>
+#include <QList>
 #include <QRegularExpression>
 #include <QString>
 
@@ -36,6 +37,17 @@ private:
 };
 
 MULTIFILTEROUTPUT_EXPORT bool lineMatches(const Pattern &pattern, const QString &line);
+
+// Where in `line` the pattern's text matches -- every occurrence, for highlighting. Empty for
+// an inverted pattern (its "match" is the absence of its text), an invalid regex or empty
+// text; zero-length regex matches (e.g. "^") are left out, having nothing to highlight.
+struct MatchSpan
+{
+    qsizetype start = 0;
+    qsizetype length = 0;
+    bool operator==(const MatchSpan &) const = default;
+};
+MULTIFILTEROUTPUT_EXPORT QList<MatchSpan> matchSpans(const Pattern &pattern, const QString &line);
 
 // True if `line` should be swept into pattern's tab as a continuation of a previous match,
 // per pattern.groupContinuationLines / pattern.continuationPattern. Never true on its own --
