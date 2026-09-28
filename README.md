@@ -138,10 +138,13 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   highlight that same line in **All**, recovering the surrounding context a
   filtered view strips away. Can be turned off from the Pattern Library
   settings page for anyone who'd rather a click just select text normally.
-- **Click-to-open** — click a recognized `file:line[:col]` reference inside
-  a line (QML warnings, `Q_ASSERT` failures, object-warning messages,
-  including `qrc:` paths resolved back to your actual source files) to open
-  it directly in the code editor.
+- **Click-to-open** — click a recognized file reference inside a line to open
+  it at that line (and column) in the code editor: QML warnings (with `qrc:`
+  paths resolved back to your actual source files), `Q_ASSERT` failures,
+  object-warning messages, GCC/Clang/GTest/sanitizer `path:line[:col]`,
+  MSVC `path(line[,col])`, Qt Test `Loc: [path(line)]` and Python
+  `File "path", line N` — several per line, relative paths found in the
+  project.
 - **Long-line truncation** — lines longer than a configurable limit
   (default 10 000 characters; set it to **No limit** to turn this off) are
   shown cut short in every tab, followed by how many characters were left
