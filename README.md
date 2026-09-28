@@ -12,6 +12,8 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   matches"), a tab color, and an order (drag-and-drop or **Move Up**/**Move
   Down**) that also determines each pattern's left-to-right tab position.
   Managed under **Tools > Options > MultiFilterOutput > Pattern Library**.
+- **Whole words only** — for plain-text patterns: `err` finds `err:` but not
+  `error` or `stderr` (applies to the exclusion too; a regex uses `\b`).
 - **Exclusions within a pattern** — *Except lines matching* leaves lines out of
   a pattern's tab even when they match it: `ERROR` except `ERROR: known
   flaky`. Read like the pattern (regex or plain text, same case sensitivity);

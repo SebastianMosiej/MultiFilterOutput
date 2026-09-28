@@ -264,6 +264,11 @@ public:
                    "expression or plain text, same case sensitivity."));
         m_regexCheck = new QCheckBox(Tr::tr("Regular expression"), this);
         m_caseSensitiveCheck = new QCheckBox(Tr::tr("Case sensitive"), this);
+        m_wholeWordCheck = new QCheckBox(Tr::tr("Whole words only"), this);
+        m_wholeWordCheck->setToolTip(
+            Tr::tr("For plain text: the pattern (and its exclude expression) must not be part "
+                   "of a longer word -- \"err\" then finds \"err:\" but not \"error\" or "
+                   "\"stderr\". For a regular expression, use \\b in it instead."));
         m_invertCheck = new QCheckBox(Tr::tr("Exclude matching lines (invert)"), this);
         m_defaultCheck = new QCheckBox(
             Tr::tr("Active by default for new run configurations"), this);
@@ -296,6 +301,8 @@ public:
         connect(m_patternEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
         connect(m_excludeEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
         connect(m_regexCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
+        connect(m_regexCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::updateWholeWordEnabled);
+        connect(m_wholeWordCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_caseSensitiveCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_invertCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_defaultCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
@@ -327,6 +334,7 @@ public:
         form->addRow(Tr::tr("Except lines matching:"), m_excludeEdit);
         form->addRow(m_regexCheck);
         form->addRow(m_caseSensitiveCheck);
+        form->addRow(m_wholeWordCheck);
         form->addRow(m_invertCheck);
         form->addRow(Tr::tr("Look at:"), channelsRow);
         form->addRow(m_defaultCheck);
@@ -437,6 +445,7 @@ private:
         m_excludeEdit->setEnabled(enabled);
         m_regexCheck->setEnabled(enabled);
         m_caseSensitiveCheck->setEnabled(enabled);
+        updateWholeWordEnabled();
         m_invertCheck->setEnabled(enabled);
         m_defaultCheck->setEnabled(enabled);
         for (QCheckBox *check : {m_stdOutCheck, m_stdErrCheck, m_messagesCheck})
@@ -445,6 +454,13 @@ private:
         m_colorButton->setEnabled(enabled);
         m_removeButton->setEnabled(enabled);
         updateContinuationFieldEnabled();
+    }
+
+    // Whole words only means something for plain text (a regex has \b); kept, not cleared,
+    // while the pattern is a regex, so toggling Regular expression back restores it.
+    void updateWholeWordEnabled()
+    {
+        m_wholeWordCheck->setEnabled(m_regexCheck->isEnabled() && !m_regexCheck->isChecked());
     }
 
     // The continuation-pattern field is only meaningfully editable when a pattern is selected
@@ -534,6 +550,7 @@ private:
             m_excludeEdit->clear();
             m_regexCheck->setChecked(false);
             m_caseSensitiveCheck->setChecked(false);
+            m_wholeWordCheck->setChecked(false);
             m_invertCheck->setChecked(false);
             m_defaultCheck->setChecked(false);
             for (QCheckBox *check : {m_stdOutCheck, m_stdErrCheck, m_messagesCheck})
@@ -562,6 +579,7 @@ private:
         m_excludeEdit->setText(pattern->excludeText);
         m_regexCheck->setChecked(pattern->isRegex);
         m_caseSensitiveCheck->setChecked(pattern->caseSensitive);
+        m_wholeWordCheck->setChecked(pattern->wholeWord);
         m_invertCheck->setChecked(pattern->invert);
         m_defaultCheck->setChecked(pattern->isDefault);
         m_stdOutCheck->setChecked(pattern->channels.testFlag(Pattern::StdOutChannel));
@@ -648,6 +666,7 @@ private:
         updated.excludeText = excludeText;
         updated.isRegex = m_regexCheck->isChecked();
         updated.caseSensitive = m_caseSensitiveCheck->isChecked();
+        updated.wholeWord = m_wholeWordCheck->isChecked();
         updated.invert = m_invertCheck->isChecked();
         updated.isDefault = m_defaultCheck->isChecked();
         updated.channels = channels;
@@ -673,6 +692,7 @@ private:
     QLineEdit *m_excludeEdit;
     QCheckBox *m_regexCheck;
     QCheckBox *m_caseSensitiveCheck;
+    QCheckBox *m_wholeWordCheck;
     QCheckBox *m_invertCheck;
     QCheckBox *m_defaultCheck;
     QCheckBox *m_groupContinuationCheck;
