@@ -81,6 +81,12 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     connect(tracker, &RunTracker::activeRunLineReceived, this, &FilteredOutputPane::onLineReceived);
     connect(tracker, &RunTracker::runsChanged, this, &FilteredOutputPane::rebuildRunSelector);
     applyHistoryLimit();
+    tracker->setFinishedRunsKept(outputPaneSettings().finishedRunsKept());
+    connect(
+        &outputPaneSettings(),
+        &OutputPaneSettings::finishedRunsKeptChanged,
+        tracker,
+        &RunTracker::setFinishedRunsKept);
     // Pattern edits apply to the running run straight away, not just from the next one.
     connect(
         &patternLibrary(),
@@ -187,7 +193,8 @@ QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
         m_runSelector->setSizeAdjustPolicy(QComboBox::AdjustToContents);
         m_runSelector->setToolTip(
             Tr::tr("Which run to filter: the newest one, the one selected in Application "
-                   "Output, or a specific running one (kept while other runs start)"));
+                   "Output, or a specific one -- running (kept while other runs start) or "
+                   "recently finished"));
         connect(m_runSelector, &QComboBox::activated, self, [self](int index) {
             if (index == 0) {
                 self->m_runTracker->setFollowMode(RunTracker::FollowMode::NewestRun);
@@ -464,10 +471,13 @@ void FilteredOutputPane::rebuildRunSelector()
     if (!m_runSelector)
         return;
 
-    const auto itemText = [](RunControl *run) {
+    const QList<RunControl *> finished = m_runTracker->finishedRunControls();
+    const auto itemText = [&finished](RunControl *run) {
         const qint64 pid = run->applicationProcessHandle().pid();
-        return pid > 0 ? Tr::tr("%1 (pid %2)").arg(run->displayName(), QString::number(pid))
-                       : run->displayName();
+        const QString name = pid > 0
+                                 ? Tr::tr("%1 (pid %2)").arg(run->displayName(), QString::number(pid))
+                                 : run->displayName();
+        return finished.contains(run) ? Tr::tr("%1 (finished)").arg(name) : name;
     };
 
     QSignalBlocker blocker(m_runSelector);
@@ -477,7 +487,8 @@ void FilteredOutputPane::rebuildRunSelector()
     m_runSelector->addItem(Tr::tr("Application Output's run"));
     m_runSelectorRuns << nullptr << nullptr;
 
-    QList<RunControl *> runs = m_runTracker->liveRunControls();
+    // Oldest first: the finished runs, then the running ones.
+    QList<RunControl *> runs = finished + m_runTracker->liveRunControls();
     RunControl *active = m_runTracker->activeRunControl();
     const bool pinned = m_runTracker->followMode() == RunTracker::FollowMode::Pinned;
     // A pinned run that has stopped is still what the pane shows: list it, so it can be seen

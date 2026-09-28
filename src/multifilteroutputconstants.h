@@ -17,6 +17,7 @@ const char SHOW_UNMATCHED_TAB_KEY[] = "ShowUnmatchedTab";
 const char MAX_CHARACTERS_PER_TAB_KEY[] = "MaxCharactersPerTab";
 const char HIGHLIGHT_IN_ALL_KEY[] = "HighlightMatchesInAll";
 const char SHOW_TIMESTAMPS_KEY[] = "ShowTimestamps";
+const char FINISHED_RUNS_KEPT_KEY[] = "FinishedRunsKept";
 // The pane's action context, so the zoom shortcuts (Ctrl++ / Ctrl+- / Ctrl+0) reach it.
 const char PANE_CONTEXT[] = "MultiFilterOutput.PaneContext";
 

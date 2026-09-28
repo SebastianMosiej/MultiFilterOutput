@@ -72,6 +72,12 @@ public:
     bool showTimestamps() const;
     void setShowTimestamps(bool enabled);
 
+    // How many stopped runs' output the pane keeps so the run selector can switch back to
+    // them (see RunTracker::setFinishedRunsKept()); 0 drops a run's output when it stops.
+    static constexpr int DefaultFinishedRunsKept = 3;
+    int finishedRunsKept() const;
+    void setFinishedRunsKept(int count);
+
     void load();
 
 signals:
@@ -81,6 +87,7 @@ signals:
     void showUnmatchedTabChanged(bool enabled);
     void maxCharactersPerTabChanged(qsizetype characters);
     void showTimestampsChanged(bool enabled);
+    void finishedRunsKeptChanged(int count);
 
 private:
     OutputPanePlacement m_placement = OutputPanePlacement::NextToApplicationOutput;
@@ -92,6 +99,7 @@ private:
     qsizetype m_maxCharactersPerTab = 0;
     bool m_highlightMatchesInAll = false;
     bool m_showTimestamps = false;
+    int m_finishedRunsKept = DefaultFinishedRunsKept;
 };
 
 MULTIFILTEROUTPUT_EXPORT OutputPaneSettings &outputPaneSettings();

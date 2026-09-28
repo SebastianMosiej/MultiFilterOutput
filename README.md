@@ -131,10 +131,13 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
 - **Choose which run to filter** — the run selector in the toolbar follows
   the *Newest run* (the default), follows *Application Output's run* (the run
   whose tab you select there), or pins one running run, which then stays
-  while others start (e.g. keep the server while restarting the client).
-  Switching to a run shows what it printed so far, since every running run's
-  recent output is kept (up to the tab output limit); a run's output is
-  dropped once it stops.
+  while others start (e.g. keep the server while restarting the client), or
+  a recently finished run. Switching to a run shows what it printed so far,
+  since every running run's recent output is kept (up to the tab output
+  limit), and so is that of the last few finished runs — *Keep output of
+  finished runs* in the Pattern Library settings (default 3; *None* drops a
+  run's output when it stops), for as long as Application Output keeps
+  their tabs.
 - **Opt-in** — disabled by default on a fresh install; you choose to turn
   it on.
 

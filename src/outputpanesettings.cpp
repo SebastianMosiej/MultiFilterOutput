@@ -185,6 +185,27 @@ void OutputPaneSettings::setShowTimestamps(bool enabled)
     emit showTimestampsChanged(m_showTimestamps);
 }
 
+int OutputPaneSettings::finishedRunsKept() const
+{
+    return m_finishedRunsKept;
+}
+
+void OutputPaneSettings::setFinishedRunsKept(int count)
+{
+    count = qMax(0, count);
+    if (m_finishedRunsKept == count)
+        return;
+    m_finishedRunsKept = count;
+
+    Utils::QtcSettings *settings = Core::ICore::settings();
+    settings->beginGroup(Constants::SETTINGS_GROUP);
+    settings->setValue(Constants::FINISHED_RUNS_KEPT_KEY, count);
+    settings->endGroup();
+    settings->sync();
+
+    emit finishedRunsKeptChanged(m_finishedRunsKept);
+}
+
 void OutputPaneSettings::load()
 {
     Utils::QtcSettings *settings = Core::ICore::settings();
@@ -198,6 +219,8 @@ void OutputPaneSettings::load()
     m_showUnmatchedTab = settings->value(Constants::SHOW_UNMATCHED_TAB_KEY, true).toBool();
     m_highlightMatchesInAll = settings->value(Constants::HIGHLIGHT_IN_ALL_KEY, false).toBool();
     m_showTimestamps = settings->value(Constants::SHOW_TIMESTAMPS_KEY, false).toBool();
+    m_finishedRunsKept = qMax(
+        0, settings->value(Constants::FINISHED_RUNS_KEPT_KEY, DefaultFinishedRunsKept).toInt());
     m_maxCharactersPerTab = qMax<qsizetype>(
         0, settings->value(Constants::MAX_CHARACTERS_PER_TAB_KEY, 0).toLongLong());
     m_maxDisplayedLineLength = qMax(

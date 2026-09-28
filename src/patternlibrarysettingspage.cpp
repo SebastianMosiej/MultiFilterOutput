@@ -186,6 +186,23 @@ public:
             outputPaneSettings().setMaxCharactersPerTab(value);
         });
 
+        auto *finishedRunsSpin = new QSpinBox(this);
+        finishedRunsSpin->setRange(0, 20);
+        finishedRunsSpin->setSpecialValueText(Tr::tr("None"));
+        finishedRunsSpin->setValue(outputPaneSettings().finishedRunsKept());
+        finishedRunsSpin->setToolTip(
+            Tr::tr("How many stopped runs' output to keep, so the pane's run selector can "
+                   "switch back to them (while Application Output still has their tabs). "
+                   "Each keeps up to the per-tab limit."));
+        finishedRunsSpin->setKeyboardTracking(false);
+        connect(finishedRunsSpin, &QSpinBox::valueChanged, this, [](int value) {
+            outputPaneSettings().setFinishedRunsKept(value);
+        });
+        auto *finishedRunsRow = new QHBoxLayout;
+        finishedRunsRow->addWidget(new QLabel(Tr::tr("Keep output of finished runs:"), this));
+        finishedRunsRow->addWidget(finishedRunsSpin);
+        finishedRunsRow->addStretch();
+
         auto *maxLineLengthRow = new QHBoxLayout;
         maxLineLengthRow->addWidget(new QLabel(Tr::tr("Maximum displayed line length:"), this));
         maxLineLengthRow->addWidget(maxLineLengthSpin);
@@ -303,6 +320,7 @@ public:
         layout->addWidget(highlightInAllCheck);
         layout->addLayout(maxLineLengthRow);
         layout->addLayout(maxCharactersRow);
+        layout->addLayout(finishedRunsRow);
         layout->addLayout(topRow);
         layout->addLayout(form);
 
