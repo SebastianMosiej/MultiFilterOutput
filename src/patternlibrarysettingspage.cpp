@@ -256,6 +256,11 @@ public:
         // selecting a row loads it here, and edits apply live -- see fieldEdited().
         m_nameEdit = new QLineEdit(this);
         m_patternEdit = new QLineEdit(this);
+        m_tagsEdit = new QLineEdit(this);
+        m_tagsEdit->setPlaceholderText(Tr::tr("Optional, comma-separated"));
+        m_tagsEdit->setToolTip(
+            Tr::tr("Groups this pattern belongs to. A run configuration's Output Filters, and "
+                   "the pane's Patterns menu, can switch a whole group on or off at once."));
         m_excludeEdit = new QLineEdit(this);
         m_excludeEdit->setPlaceholderText(Tr::tr("Optional"));
         m_excludeEdit->setToolTip(
@@ -309,6 +314,7 @@ public:
         connect(m_nameEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
         connect(m_patternEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
         connect(m_excludeEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
+        connect(m_tagsEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
         connect(m_regexCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_regexCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::updateWholeWordEnabled);
         connect(m_wholeWordCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
@@ -360,6 +366,7 @@ public:
         form->addRow(Tr::tr("Continuation line starts with:"), m_continuationPatternEdit);
         form->addRow(Tr::tr("Context lines:"), contextRow);
         form->addRow(Tr::tr("Tab color:"), m_colorButton);
+        form->addRow(Tr::tr("Tags:"), m_tagsEdit);
         form->addRow(m_errorLabel);
 
         auto *layout = new QVBoxLayout(this);
@@ -462,6 +469,7 @@ private:
         m_nameEdit->setEnabled(enabled);
         m_patternEdit->setEnabled(enabled);
         m_excludeEdit->setEnabled(enabled);
+        m_tagsEdit->setEnabled(enabled);
         m_regexCheck->setEnabled(enabled);
         m_caseSensitiveCheck->setEnabled(enabled);
         updateWholeWordEnabled();
@@ -569,6 +577,7 @@ private:
             m_nameEdit->clear();
             m_patternEdit->clear();
             m_excludeEdit->clear();
+            m_tagsEdit->clear();
             m_regexCheck->setChecked(false);
             m_caseSensitiveCheck->setChecked(false);
             m_wholeWordCheck->setChecked(false);
@@ -600,6 +609,7 @@ private:
         m_nameEdit->setText(pattern->name);
         m_patternEdit->setText(pattern->patternText);
         m_excludeEdit->setText(pattern->excludeText);
+        m_tagsEdit->setText(pattern->tags.join(", "));
         m_regexCheck->setChecked(pattern->isRegex);
         m_caseSensitiveCheck->setChecked(pattern->caseSensitive);
         m_wholeWordCheck->setChecked(pattern->wholeWord);
@@ -689,6 +699,7 @@ private:
         updated.name = m_nameEdit->text();
         updated.patternText = text;
         updated.excludeText = excludeText;
+        updated.tags = Pattern::tagsFromText(m_tagsEdit->text());
         updated.isRegex = m_regexCheck->isChecked();
         updated.caseSensitive = m_caseSensitiveCheck->isChecked();
         updated.wholeWord = m_wholeWordCheck->isChecked();
@@ -717,6 +728,7 @@ private:
     QLineEdit *m_nameEdit;
     QLineEdit *m_patternEdit;
     QLineEdit *m_excludeEdit;
+    QLineEdit *m_tagsEdit;
     QCheckBox *m_regexCheck;
     QCheckBox *m_caseSensitiveCheck;
     QCheckBox *m_wholeWordCheck;

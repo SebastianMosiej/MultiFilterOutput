@@ -12,6 +12,10 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   matches"), a tab color, and an order (drag-and-drop or **Move Up**/**Move
   Down**) that also determines each pattern's left-to-right tab position.
   Managed under **Tools > Options > MultiFilterOutput > Pattern Library**.
+- **Pattern groups** — give patterns *Tags* in the Pattern Library; a run
+  configuration's *Output Filters* then shows each group as one checkbox that
+  switches all of its patterns on or off, and the pane's **Patterns** menu has
+  the same groups for the current run.
 - **Context lines** — like grep's `-B`/`-A`, a pattern can also show a few
   lines before and after each match in its tab (not counted as matches;
   overlapping context isn't repeated, and it never reaches across a

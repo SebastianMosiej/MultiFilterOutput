@@ -10,6 +10,8 @@
 #include <utils/detailswidget.h>
 
 #include <QCheckBox>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QPointer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -99,23 +101,76 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
                 delete child->widget();
                 delete child;
             }
-            for (const Pattern &pattern : patternLibrary().patterns()) {
+            const QList<Pattern> patterns = patternLibrary().patterns();
+
+            // One tri-state checkbox per group (see Pattern::tags): checked when all of its
+            // patterns are active, partially when some are. A click activates the whole group
+            // -- or deactivates it when all were active.
+            QList<QPair<QString, QPointer<QCheckBox>>> groupBoxes;
+            if (const QStringList tags = patternTags(patterns); !tags.isEmpty()) {
+                auto *groupsRow = new QWidget;
+                auto *groupsLayout = new QHBoxLayout(groupsRow);
+                groupsLayout->setContentsMargins(0, 0, 0, 0);
+                groupsLayout->addWidget(new QLabel(Tr::tr("Groups:")));
+                for (const QString &tag : tags) {
+                    const int size = int(patternIdsWithTag(patterns, tag).size());
+                    auto *groupBox = new QCheckBox(Tr::tr("%1 (%2)").arg(tag).arg(size));
+                    groupBox->setToolTip(Tr::tr("Activate or deactivate every pattern tagged "
+                                                "\"%1\".")
+                                             .arg(tag));
+                    groupsLayout->addWidget(groupBox);
+                    groupBoxes.append({tag, groupBox});
+                }
+                groupsLayout->addStretch();
+                layout->addWidget(groupsRow);
+            }
+            const auto updateGroups = [this, groupBoxes] {
+                const QList<Pattern> patterns = patternLibrary().patterns();
+                for (const auto &[tag, groupBox] : groupBoxes) {
+                    if (!groupBox)
+                        continue;
+                    const QStringList ids = patternIdsWithTag(patterns, tag);
+                    const auto active = std::count_if(ids.cbegin(), ids.cend(), [this](const QString &id) {
+                        return m_enabledPatternIds.contains(id);
+                    });
+                    const QSignalBlocker blocker(groupBox);
+                    groupBox->setCheckState(
+                        active == 0             ? Qt::Unchecked
+                        : active == ids.size() ? Qt::Checked
+                                                : Qt::PartiallyChecked);
+                }
+            };
+            for (const auto &[tag, groupBox] : groupBoxes) {
+                connect(groupBox, &QCheckBox::clicked, this, [this, tag, groupBox] {
+                    // The click has already moved the box on; what it showed before decides.
+                    // The changed() that setGroupEnabled() emits rebuilds this list -- deleting
+                    // the box -- so not from inside its own signal.
+                    const bool enable = groupBox->checkState() != Qt::Unchecked;
+                    QMetaObject::invokeMethod(
+                        this, [this, tag, enable] { setGroupEnabled(tag, enable); },
+                        Qt::QueuedConnection);
+                });
+            }
+
+            for (const Pattern &pattern : patterns) {
                 auto *checkBox = new QCheckBox(pattern.name);
                 checkBox->setChecked(m_enabledPatternIds.contains(pattern.id));
                 connect(
                     checkBox,
                     &QCheckBox::toggled,
                     this,
-                    [this, id = pattern.id, updateSummary](bool checked) {
+                    [this, id = pattern.id, updateSummary, updateGroups](bool checked) {
                         if (checked && !m_enabledPatternIds.contains(id))
                             m_enabledPatternIds.append(id);
                         else if (!checked)
                             m_enabledPatternIds.removeAll(id);
                         updateSummary();
+                        updateGroups();
                     });
                 layout->addWidget(checkBox);
             }
             updateSummary();
+            updateGroups();
         };
         rebuild();
         connect(&patternLibrary(), &PatternLibrary::patternsChanged, this, rebuild);

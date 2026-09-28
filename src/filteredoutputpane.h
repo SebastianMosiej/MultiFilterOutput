@@ -65,6 +65,9 @@ private:
     // Toggles a pattern for the active run -- and, like Run Settings > Output Filters, for the
     // run configuration it was started from.
     void setPatternEnabledForRun(const QString &id, bool enabled);
+    // The same for several patterns at once -- a group (see Pattern::tags); `what` names them
+    // in the message for when the run configuration can't be identified.
+    void setPatternsEnabledForRun(const QStringList &ids, bool enabled, const QString &what);
     // The "which patterns filter this run" menu: the tab bar's context menu and the
     // Patterns toolbar button.
     void showPatternsMenu(const QPoint &globalPos);

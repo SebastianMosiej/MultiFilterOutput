@@ -564,28 +564,37 @@ RunConfiguration *FilteredOutputPane::launchedRunConfiguration(RunControl *runCo
 
 void FilteredOutputPane::setPatternEnabledForRun(const QString &id, bool enabled)
 {
+    const std::optional<Pattern> pattern = patternLibrary().patternById(id);
+    setPatternsEnabledForRun(
+        {id}, enabled, Tr::tr("\"%1\"").arg(pattern ? pattern->name : id));
+}
+
+void FilteredOutputPane::setPatternsEnabledForRun(
+    const QStringList &ids, bool enabled, const QString &what)
+{
     RunControl *run = m_runTracker->activeRunControl();
     if (!run)
         return;
-    if (enabled && !m_runPatternIds.contains(id))
-        m_runPatternIds.append(id);
-    else if (!enabled)
-        m_runPatternIds.removeAll(id);
+    for (const QString &id : ids) {
+        if (enabled && !m_runPatternIds.contains(id))
+            m_runPatternIds.append(id);
+        else if (!enabled)
+            m_runPatternIds.removeAll(id);
+    }
     refreshPatternTabs();
 
     // Like ticking the box in Run Settings > Output Filters: the next run of the same run
     // configuration keeps the choice.
-    const std::optional<Pattern> pattern = patternLibrary().patternById(id);
-    const QString name = pattern ? pattern->name : id;
+    const QString name = what;
     if (RunConfiguration *rc = launchedRunConfiguration(run)) {
         if (auto *aspect = rc->aspect<FilterSetAspect>())
-            aspect->setPatternEnabled(id, enabled);
+            aspect->setPatternsEnabled(ids, enabled);
     } else {
         Core::MessageManager::writeSilently(
-            (enabled ? Tr::tr("MultiFilterOutput: enabled \"%1\" for this run only -- the run "
+            (enabled ? Tr::tr("MultiFilterOutput: enabled %1 for this run only -- the run "
                               "configuration it was started from couldn't be identified, so its "
                               "Output Filters are unchanged.")
-                     : Tr::tr("MultiFilterOutput: disabled \"%1\" for this run only -- the run "
+                     : Tr::tr("MultiFilterOutput: disabled %1 for this run only -- the run "
                               "configuration it was started from couldn't be identified, so its "
                               "Output Filters are unchanged."))
                 .arg(name));
@@ -617,6 +626,23 @@ void FilteredOutputPane::fillPatternsMenu(QMenu *menu)
         connect(action, &QAction::toggled, this, [this, id = pattern.id](bool checked) {
             setPatternEnabledForRun(id, checked);
         });
+    }
+    // Whole groups (see Pattern::tags): checked when all of a group's patterns filter the run.
+    if (const QStringList tags = patternTags(patterns); !tags.isEmpty()) {
+        menu->addSection(Tr::tr("Groups"));
+        for (const QString &tag : tags) {
+            const QStringList ids = patternIdsWithTag(patterns, tag);
+            const bool allOn = std::all_of(ids.cbegin(), ids.cend(), [this](const QString &id) {
+                return m_runPatternIds.contains(id);
+            });
+            QAction *action = menu->addAction(Tr::tr("%1 (%2)").arg(tag).arg(ids.size()));
+            action->setCheckable(true);
+            action->setChecked(allOn);
+            action->setEnabled(haveRun);
+            connect(action, &QAction::toggled, this, [this, tag, ids](bool checked) {
+                setPatternsEnabledForRun(ids, checked, Tr::tr("the group \"%1\"").arg(tag));
+            });
+        }
     }
     menu->addSeparator();
     connect(menu->addAction(Tr::tr("Edit Pattern Library...")), &QAction::triggered, this, [] {
