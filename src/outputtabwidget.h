@@ -1,5 +1,6 @@
 #pragma once
 
+#include "linematcher.h"
 #include "multifilteroutput_global.h"
 
 #include <utils/filepath.h>
@@ -104,6 +105,13 @@ public:
 
     // A note the pane itself added (e.g. "... lines dropped"), not a line of the app's output.
     void markLastLineAsNotice();
+
+    // The line just appended, as shown -- what match highlighting has to be computed on,
+    // since that is what the spans must point into (truncated, escape codes gone).
+    QString lastLineText() const;
+    // Gives these character ranges of the line just appended a background of `color`, e.g.
+    // where a pattern matched it. Ranges beyond the line are clipped.
+    void highlightLastLine(const QList<MatchSpan> &spans, const QColor &color);
 
     // The lines the tab still holds, oldest first, as shown -- for replaying All through
     // changed patterns.

@@ -47,6 +47,8 @@ private slots:
     void characterLimitDropsOldestLines();
     void characterLimitKeepsNewestLineEvenIfLonger();
     void noCharacterLimitByDefault();
+    void lastLineTextIsTheLineAsShown();
+    void highlightLastLineTintsExactlyTheSpans();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -558,6 +560,42 @@ void tst_OutputTabWidget::noCharacterLimitByDefault()
     // That cap also switched undo off as a side effect (a non-zero maximumBlockCount does);
     // without it, every appended line would be stored a second time in the undo history.
     QVERIFY(!tab.document()->isUndoRedoEnabled());
+}
+
+void tst_OutputTabWidget::lastLineTextIsTheLineAsShown()
+{
+    OutputTabWidget tab;
+    tab.setMaxLineLength(5);
+    tab.appendLine("first", Utils::StdOutFormat);
+    tab.appendLine("abcdefgh", Utils::StdOutFormat);
+    QCOMPARE(tab.lastLineText(), QStringLiteral("abcde ... [3 more characters not shown]"));
+}
+
+// The background of the character at `index` of the last line.
+static QColor backgroundAt(const OutputTabWidget &tab, int index)
+{
+    const QTextBlock block = tab.document()->lastBlock().previous();
+    QTextCursor cursor(block);
+    cursor.setPosition(block.position() + index + 1); // the format of the char before the cursor
+    return cursor.charFormat().background().color();
+}
+
+void tst_OutputTabWidget::highlightLastLineTintsExactlyTheSpans()
+{
+    OutputTabWidget tab;
+    tab.appendLine("an ERROR and another ERROR", Utils::StdOutFormat);
+    const QColor tint(255, 200, 0);
+
+    tab.highlightLastLine({{3, 5}, {21, 5}, {24, 100}}, tint);
+
+    QVERIFY(backgroundAt(tab, 2) != tint);
+    QCOMPARE(backgroundAt(tab, 3), tint);
+    QCOMPARE(backgroundAt(tab, 7), tint);
+    QVERIFY(backgroundAt(tab, 8) != tint);
+    QCOMPARE(backgroundAt(tab, 21), tint);
+    QCOMPARE(backgroundAt(tab, 25), tint); // the out-of-range span was clipped, not dropped
+    // Only formatting changed, never the text.
+    QCOMPARE(tab.lastLineText(), QStringLiteral("an ERROR and another ERROR"));
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

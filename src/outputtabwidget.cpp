@@ -297,6 +297,34 @@ void OutputTabWidget::markLineAsMatch(int lineId)
     ++m_matchStops;
 }
 
+QString OutputTabWidget::lastLineText() const
+{
+    // The last block is the empty one appendLine()'s newline opened; the line is before it.
+    return document()->lastBlock().previous().text();
+}
+
+void OutputTabWidget::highlightLastLine(const QList<MatchSpan> &spans, const QColor &color)
+{
+    const QTextBlock block = document()->lastBlock().previous();
+    if (!block.isValid() || spans.isEmpty())
+        return;
+    const qsizetype lineLength = block.length() - 1; // without the block separator
+    QTextCharFormat tint;
+    tint.setBackground(color);
+    for (const MatchSpan &span : spans) {
+        const qsizetype start = qBound<qsizetype>(0, span.start, lineLength);
+        const qsizetype end = qBound<qsizetype>(start, span.start + span.length, lineLength);
+        if (start == end)
+            continue;
+        QTextCursor cursor(block);
+        cursor.setPosition(int(block.position() + start));
+        cursor.setPosition(int(block.position() + end), QTextCursor::KeepAnchor);
+        // Merged, not set: keeps a linkified file reference's own formatting (see
+        // MultiFilterLineParser) and the output format's text color.
+        cursor.mergeCharFormat(tint);
+    }
+}
+
 void OutputTabWidget::markLastLineAsNotice()
 {
     const QTextBlock block = document()->lastBlock().previous();
