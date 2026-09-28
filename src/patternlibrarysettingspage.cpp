@@ -7,6 +7,7 @@
 #include "patternexchange.h"
 #include "patternlibrary.h"
 #include "projectpatterns.h"
+#include "starterpatterns.h"
 
 #include <coreplugin/icore.h>
 
@@ -267,6 +268,24 @@ public:
         connect(exportButton, &QPushButton::clicked, this, &PatternLibraryWidget::exportPatternFile);
         buttonColumn->addWidget(importButton);
         buttonColumn->addWidget(exportButton);
+        auto *starterButton = new QPushButton(Tr::tr("Add Starter Patterns"), this);
+        starterButton->setToolTip(
+            Tr::tr("Add the built-in patterns for errors, warnings, QML messages, assertions "
+                   "and Qt Test failures (tagged \"starter\") that the list doesn't have yet."));
+        connect(starterButton, &QPushButton::clicked, this, [this] {
+            const qsizetype before = m_workingPatterns.size();
+            m_workingPatterns = withStarterPatterns(m_workingPatterns);
+            if (m_workingPatterns.size() == before) {
+                QMessageBox::information(
+                    this,
+                    Tr::tr("Add Starter Patterns"),
+                    Tr::tr("All starter patterns are already in the list."));
+                return;
+            }
+            refreshTree();
+            Utils::markSettingsDirty();
+        });
+        buttonColumn->addWidget(starterButton);
         m_shareButton = new QPushButton(Tr::tr("Share with Project..."), this);
         m_shareButton->setToolTip(
             Tr::tr("Copy the selected pattern, as edited here, into an open project's "

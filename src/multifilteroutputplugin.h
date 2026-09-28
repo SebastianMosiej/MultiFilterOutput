@@ -24,6 +24,8 @@ public:
     ShutdownFlag aboutToShutdown() final;
 
 private:
+    void offerStarterPatterns();
+
     // Owned here -- NOT function-local statics -- so they are destroyed from
     // ~MultiFilterOutputPlugin(), which ExtensionSystem::PluginManager calls at a
     // controlled point in its dependency-ordered shutdown, while Core/ProjectExplorer are

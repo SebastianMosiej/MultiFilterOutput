@@ -12,6 +12,11 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   matches"), a tab color, and an order (drag-and-drop or **Move Up**/**Move
   Down**) that also determines each pattern's left-to-right tab position.
   Managed under **Tools > Options > MultiFilterOutput > Pattern Library**.
+- **Starter patterns** — a fresh install offers (in Qt Creator's info bar)
+  ready-made patterns for errors, warnings, QML messages, assertions and Qt
+  Test failures, tagged *starter*; **Add Starter Patterns** on the Pattern
+  Library page adds any that are missing later. None is switched on by
+  itself.
 - **Per-run-configuration pane settings** — a run configuration's *Output
   Filters* can override *Show the pane on run start* and the *Unmatched* tab
   for its runs (Default follows Preferences), e.g. pop up for the app you

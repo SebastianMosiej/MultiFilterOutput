@@ -8,6 +8,7 @@
 #include "patternlibrary.h"
 #include "patternlibrarysettingspage.h"
 #include "projectpatterns.h"
+#include "starterpatterns.h"
 #include "runtracker.h"
 
 #include <coreplugin/dialogs/ioptionspage.h>
@@ -15,6 +16,8 @@
 #include <coreplugin/messagemanager.h>
 
 #include <projectexplorer/runconfiguration.h>
+
+#include <utils/infobar.h>
 
 namespace MultiFilterOutput::Internal {
 
@@ -38,6 +41,7 @@ void MultiFilterOutputPlugin::initialize()
     for (const QString &problem : patternLibrary().load(Core::ICore::settings()))
         Core::MessageManager::writeSilently(Tr::tr("MultiFilterOutput: %1").arg(problem));
     outputPaneSettings().load();
+    offerStarterPatterns();
 
     ProjectExplorer::RunConfiguration::registerAspect<FilterSetAspect>();
 
@@ -56,6 +60,29 @@ void MultiFilterOutputPlugin::initialize()
     m_runTracker = new RunTracker;
     m_runTracker->attachToProjectExplorer();
     m_outputPane = new FilteredOutputPane(m_runTracker);
+}
+
+// A fresh install has an empty Pattern Library and so nothing to filter by: offer the starter
+// set once, in Qt Creator's info bar -- not forced on anyone, and never again once added or
+// dismissed for good.
+void MultiFilterOutputPlugin::offerStarterPatterns()
+{
+    const Utils::Id id("MultiFilterOutput.StarterPatterns");
+    Utils::InfoBar *infoBar = Core::ICore::infoBar();
+    if (!patternLibrary().patterns().isEmpty() || !infoBar->canInfoBeAdded(id))
+        return;
+    Utils::InfoBarEntry info(
+        id,
+        Tr::tr("MultiFilterOutput's Pattern Library is empty. Add starter patterns for errors, "
+               "warnings, QML messages, assertions and Qt Test failures? Turn them on for a "
+               "run configuration in Run Settings > Output Filters (group \"starter\")."),
+        Utils::InfoBarEntry::GlobalSuppression::Enabled);
+    info.addCustomButton(
+        Tr::tr("Add Starter Patterns"),
+        [] { patternLibrary().setPatterns(withStarterPatterns(patternLibrary().patterns())); },
+        {},
+        Utils::InfoBarEntry::ButtonAction::SuppressPersistently);
+    infoBar->addInfo(info);
 }
 
 ExtensionSystem::IPlugin::ShutdownFlag MultiFilterOutputPlugin::aboutToShutdown()
