@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  # Qt Creator 21 and 22 are both built with Qt 6.11 (see QT_VERSION in their own
+  # Qt Creator 20.0.1, 21 and 22 are all built with Qt 6.11 (see QT_VERSION in their own
   # .github/workflows/build_cmake.yml). The plugin has to be built against that Qt (or an older
   # 6.x), and the tests load Qt Creator's libraries, which need it at runtime.
   QT_VERSION: 6.11.0
@@ -34,6 +34,8 @@ jobs:
           # Pre-releases are only published under download.qt.io/snapshots, which
           # install-dev-package falls back to.
           - { version: 21.0.0-beta1, experimental: false }
+          # The current release (plugin API 20.0.0), supported too -- see src/qtccompat.h.
+          - { version: 20.0.1, experimental: false }
           # The next one, to catch Qt Creator API breaks before they land.
           - { version: 22.0.0-beta1, experimental: true }
 

@@ -193,11 +193,14 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
 
 ## Requirements
 
-- **Qt Creator 21** (`21.0.0-beta1`, plugin API version `20.0.82`). The
-  plugin is built against the `21.0` branch and will not load into Qt
-  Creator 20 or earlier: out-of-tree plugins are tied to the exact
+- **Qt Creator 21** (`21.0.0-beta1`, plugin API version `20.0.82`) or
+  **Qt Creator 20** (`20.0.x`, plugin API version `20.0.0`). Build against
+  the version you will run it in: out-of-tree plugins are tied to the exact
   `Core`/`ProjectExplorer`/`TextEditor` API version they compile against,
-  and a mismatch is reported as an unresolved dependency on `core`.
+  and a mismatch is reported as an unresolved dependency on `core`. CMake
+  picks the right code for the Qt Creator it finds (`src/qtccompat.h`); on
+  Qt Creator 20 the run selector has no *Application Output's run* mode,
+  which needs an API new in 21.
 - Headers and the exported `QtCreator` CMake package for that version —
   an end-user Qt Creator *installation* alone is not enough. Either:
   - a Qt Creator source/build tree of that version, or

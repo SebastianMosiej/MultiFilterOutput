@@ -2,7 +2,11 @@
 
 #include <coreplugin/find/ifindsupport.h>
 
-#include <utils/aggregate.h>
+#include "../src/qtccompat.h"
+
+#if !MULTIFILTEROUTPUT_QTC21
+#include <utils/theme/theme_p.h>
+#endif
 
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -16,6 +20,7 @@ class tst_OutputTabWidget : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase();
     void jumpLandsOnMirroredLineAfterAllTabTrims();
     void matchCountChangedIsCoalesced();
     void jumpToLineTrimmedFromAllTabFails();
@@ -289,7 +294,7 @@ void tst_OutputTabWidget::ctrlFFindsTextInTab()
     tab.appendLine("first line", Utils::StdOutFormat);
     tab.appendLine("the needle is here", Utils::StdOutFormat);
 
-    auto *find = Utils::Aggregation::query<Core::IFindSupport>(&tab);
+    auto *find = Compat::Aggregation::query<Core::IFindSupport>(&tab);
     QVERIFY(find);
     QCOMPARE(find->findStep("needle", {}), Core::IFindSupport::Found);
     QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("needle"));
@@ -715,6 +720,15 @@ void tst_OutputTabWidget::markLastLineAsOldMarksOnlyThatLine()
     QVERIFY(lines.at(0).isOld);
     QVERIFY(!lines.at(1).isOld);
     QVERIFY(foregroundOf(tab, 0) != foregroundOf(tab, 1));
+}
+
+// OutputFormatter takes its colors from Qt Creator's theme, which Qt Creator always sets up.
+// Before 21, creatorColor() doesn't cope with there being none, as in this test.
+void tst_OutputTabWidget::initTestCase()
+{
+#if !MULTIFILTEROUTPUT_QTC21
+    Utils::setCreatorTheme(new Utils::Theme("tst_outputtabwidget", this));
+#endif
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

@@ -50,6 +50,12 @@ public:
     //  - Pinned: the run chosen with pinRunControl() stays, even as newer runs start. If it
     //    goes away, the tracker falls back to NewestRun.
     enum class FollowMode { NewestRun, ApplicationOutput, Pinned };
+    // ApplicationOutput needs RunControl::outputVisibilityChanged(), new in Qt Creator 21;
+    // without it setFollowMode() takes ApplicationOutput as NewestRun.
+    static constexpr bool canFollowApplicationOutput()
+    {
+        return MULTIFILTEROUTPUT_QTC21;
+    }
     FollowMode followMode() const;
     // NewestRun or ApplicationOutput; for Pinned use pinRunControl().
     void setFollowMode(FollowMode mode);

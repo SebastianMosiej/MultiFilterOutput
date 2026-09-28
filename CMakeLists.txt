@@ -14,6 +14,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(QtCreator REQUIRED COMPONENTS Core ProjectExplorer TextEditor)
 find_package(Qt6 COMPONENTS Widgets REQUIRED)
 
+# Qt Creator 21 (plugin API 20.0.82) and 20.x both work; see src/qtccompat.h for what differs.
+# IDE_VERSION_COMPAT comes from the found Qt Creator's QtCreatorIDEBranding.cmake.
+if(IDE_VERSION_COMPAT VERSION_GREATER_EQUAL 20.0.82)
+  set(MFO_QTC_21 ON)
+  set(MFO_AGGREGATION_DEPENDS "")
+else()
+  set(MFO_QTC_21 OFF)
+  set(MFO_AGGREGATION_DEPENDS QtCreator::Aggregation)
+endif()
+message(STATUS "MultiFilterOutput: building for Qt Creator plugin API ${IDE_VERSION_COMPAT}")
+
 option(WITH_TESTS "Builds with tests" NO)
 
 if(WITH_TESTS)
@@ -31,6 +42,7 @@ add_qtc_plugin(MultiFilterOutput
     Qt::Widgets
     QtCreator::ExtensionSystem
     QtCreator::Utils
+    ${MFO_AGGREGATION_DEPENDS}
   SOURCES
     src/multifilteroutput_global.h
     src/multifilteroutputconstants.h
@@ -52,6 +64,8 @@ add_qtc_plugin(MultiFilterOutput
     src/patternlibrary.h
     src/projectpatterns.h
     src/projectpatterns.cpp
+    src/qtccompat.h
+    src/qtccompat.cpp
     src/starterpatterns.h
     src/starterpatterns.cpp
     src/patternlibrary.cpp
@@ -77,6 +91,12 @@ add_qtc_plugin(MultiFilterOutput
     src/filteredoutputpane.cpp
     MultiFilterOutput.qrc
 )
+
+if(TARGET MultiFilterOutput)
+  target_compile_definitions(MultiFilterOutput PUBLIC
+    MULTIFILTEROUTPUT_QTC21=$<BOOL:${MFO_QTC_21}>
+  )
+endif()
 
 target_include_directories(MultiFilterOutput PRIVATE src)
 
@@ -123,7 +143,7 @@ if(WITH_TESTS)
   )
   add_qtc_test(tst_outputtabwidget
     SOURCES tests/tst_outputtabwidget.cpp
-    DEPENDS MultiFilterOutput QtCreator::Core
+    DEPENDS MultiFilterOutput QtCreator::Core ${MFO_AGGREGATION_DEPENDS}
   )
   add_qtc_test(tst_linequeue
     SOURCES tests/tst_linequeue.cpp

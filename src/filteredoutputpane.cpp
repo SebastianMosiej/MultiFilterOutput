@@ -206,10 +206,9 @@ QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
                    "Output, or a specific one -- running (kept while other runs start) or "
                    "recently finished"));
         connect(m_runSelector, &QComboBox::activated, self, [self](int index) {
-            if (index == 0) {
-                self->m_runTracker->setFollowMode(RunTracker::FollowMode::NewestRun);
-            } else if (index == 1) {
-                self->m_runTracker->setFollowMode(RunTracker::FollowMode::ApplicationOutput);
+            // A follow mode's entry carries it as data; a run's is in m_runSelectorRuns.
+            if (const QVariant mode = self->m_runSelector->itemData(index); mode.isValid()) {
+                self->m_runTracker->setFollowMode(RunTracker::FollowMode(mode.toInt()));
             } else if (index < self->m_runSelectorRuns.size()) {
                 if (RunControl *run = self->m_runSelectorRuns.at(index))
                     self->m_runTracker->pinRunControl(run);
@@ -523,9 +522,13 @@ void FilteredOutputPane::rebuildRunSelector()
     QSignalBlocker blocker(m_runSelector);
     m_runSelector->clear();
     m_runSelectorRuns.clear();
-    m_runSelector->addItem(Tr::tr("Newest run"));
-    m_runSelector->addItem(Tr::tr("Application Output's run"));
-    m_runSelectorRuns << nullptr << nullptr;
+    m_runSelector->addItem(Tr::tr("Newest run"), int(RunTracker::FollowMode::NewestRun));
+    m_runSelectorRuns << nullptr;
+    if (RunTracker::canFollowApplicationOutput()) {
+        m_runSelector->addItem(
+            Tr::tr("Application Output's run"), int(RunTracker::FollowMode::ApplicationOutput));
+        m_runSelectorRuns << nullptr;
+    }
 
     // Oldest first: the finished runs, then the running ones.
     QList<RunControl *> runs = finished + m_runTracker->liveRunControls();
@@ -547,17 +550,11 @@ void FilteredOutputPane::rebuildRunSelector()
             Qt::UniqueConnection);
     }
 
-    switch (m_runTracker->followMode()) {
-    case RunTracker::FollowMode::NewestRun:
-        m_runSelector->setCurrentIndex(0);
-        break;
-    case RunTracker::FollowMode::ApplicationOutput:
-        m_runSelector->setCurrentIndex(1);
-        break;
-    case RunTracker::FollowMode::Pinned:
+    if (m_runTracker->followMode() == RunTracker::FollowMode::Pinned)
         m_runSelector->setCurrentIndex(qMax(0, int(m_runSelectorRuns.indexOf(active))));
-        break;
-    }
+    else
+        m_runSelector->setCurrentIndex(
+            qMax(0, m_runSelector->findData(int(m_runTracker->followMode()))));
 }
 
 QStringList FilteredOutputPane::launchPatternIds(RunControl *runControl) const

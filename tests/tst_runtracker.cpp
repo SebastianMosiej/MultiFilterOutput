@@ -334,6 +334,7 @@ void tst_RunTracker::rerunOfPinnedRunResetsIt()
 
 void tst_RunTracker::followsApplicationOutputsSelectedTab()
 {
+#if MULTIFILTEROUTPUT_QTC21
     RunTracker tracker;
     tracker.setFollowMode(RunTracker::FollowMode::ApplicationOutput);
     auto older = makeRun();
@@ -348,10 +349,14 @@ void tst_RunTracker::followsApplicationOutputsSelectedTab()
 
     older->setOutputVisible(false); // Application Output hidden: keep what we have
     QCOMPARE(tracker.activeRunControl(), older.get());
+#else
+    QSKIP("needs RunControl::setOutputVisible(), new in Qt Creator 21");
+#endif
 }
 
 void tst_RunTracker::newestModeIgnoresApplicationOutputsSelectedTab()
 {
+#if MULTIFILTEROUTPUT_QTC21
     RunTracker tracker;
     auto older = makeRun();
     auto newer = makeRun();
@@ -361,11 +366,15 @@ void tst_RunTracker::newestModeIgnoresApplicationOutputsSelectedTab()
     older->setOutputVisible(true);
 
     QCOMPARE(tracker.activeRunControl(), newer.get());
+#else
+    QSKIP("needs RunControl::setOutputVisible(), new in Qt Creator 21");
+#endif
 }
 
 // Leaving Pinned (or switching modes) jumps to the run the new mode would have chosen.
 void tst_RunTracker::unpinningCatchesUpWithTheNewMode()
 {
+#if MULTIFILTEROUTPUT_QTC21
     RunTracker tracker;
     auto older = makeRun();
     auto newer = makeRun();
@@ -380,6 +389,9 @@ void tst_RunTracker::unpinningCatchesUpWithTheNewMode()
     older->setOutputVisible(true);
     tracker.setFollowMode(RunTracker::FollowMode::ApplicationOutput);
     QCOMPARE(tracker.activeRunControl(), older.get());
+#else
+    QSKIP("needs RunControl::setOutputVisible(), new in Qt Creator 21");
+#endif
 }
 
 void tst_RunTracker::finishedRunKeepsItsOutputAndCanBeSwitchedTo()

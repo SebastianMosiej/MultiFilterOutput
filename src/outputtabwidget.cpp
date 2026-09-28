@@ -1,5 +1,7 @@
 #include "outputtabwidget.h"
 
+#include "qtccompat.h"
+
 #include "linematcher.h"
 #include "multifilterlineparser.h"
 #include "multifilteroutputtr.h"
@@ -8,9 +10,7 @@
 #include <coreplugin/editormanager/editormanager.h>
 #include <coreplugin/find/basetextfind.h>
 
-#include <texteditor/fontsettings.h>
 
-#include <utils/aggregate.h>
 #include <utils/link.h>
 
 #include <QAbstractScrollArea>
@@ -147,7 +147,7 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
     // widget (or a parent), and every output pane shares a Find toolbar placeholder -- so
     // this is all it takes, exactly as Core::OutputWindow does it. The aggregate owns the
     // find support and deletes it along with this widget.
-    Utils::Aggregation::aggregate({this, new Core::BaseTextFind<QPlainTextEdit>(this)});
+    Compat::Aggregation::aggregate({this, new Core::BaseTextFind<QPlainTextEdit>(this)});
 
     // Coalesces matchCountChanged(): appendLine() only starts this zero-interval timer, so a
     // burst of matches appended within one event-loop pass costs a single tab relabel.
@@ -160,12 +160,8 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
 
     // Match Application Output's font, including live updates when the user changes it in
     // Preferences > Text Editor > Font & Colors -- Core::OutputWindow follows the same setting.
-    setBaseFont(TextEditor::globalFontSettings().data().font());
-    connect(
-        &TextEditor::globalFontSettings(),
-        &TextEditor::FontSettings::changed,
-        this,
-        [this] { setBaseFont(TextEditor::globalFontSettings().data().font()); });
+    setBaseFont(Compat::textEditorFont());
+    Compat::onTextEditorFontChanged(this, [this] { setBaseFont(Compat::textEditorFont()); });
 
     // An absolute "file://" link is resolved by OutputFormatter itself (see
     // Utils::OutputFormatter::handleFileLink()) rather than being forwarded to the line

@@ -42,6 +42,8 @@ RunTracker::FollowMode RunTracker::followMode() const
 
 void RunTracker::setFollowMode(FollowMode mode)
 {
+    if (mode == FollowMode::ApplicationOutput && !canFollowApplicationOutput())
+        mode = FollowMode::NewestRun;
     if (mode == FollowMode::Pinned || mode == m_followMode)
         return;
     m_followMode = mode;
@@ -49,12 +51,14 @@ void RunTracker::setFollowMode(FollowMode mode)
     // Catch up with what the new mode would have chosen: the run whose tab Application Output
     // shows, or the newest live run. Nothing live: keep what is on screen.
     RunControl *wanted = nullptr;
+#if MULTIFILTEROUTPUT_QTC21
     if (mode == FollowMode::ApplicationOutput) {
         for (RunControl *runControl : std::as_const(m_liveOrder)) {
             if (runControl->isOutputVisible())
                 wanted = runControl;
         }
     }
+#endif
     if (!wanted && !m_liveOrder.isEmpty())
         wanted = m_liveOrder.last();
     if (wanted && wanted != m_active)
@@ -162,11 +166,13 @@ void RunTracker::trackRunControl(RunControl *runControl)
                 emit activeRunLineReceived(line.text, line.format);
         });
 
+#if MULTIFILTEROUTPUT_QTC21
     // Application Output shows this run's tab (and is itself visible).
     connect(runControl, &RunControl::outputVisibilityChanged, this, [this, runControl](bool visible) {
         if (visible && m_followMode == FollowMode::ApplicationOutput && runControl != m_active)
             activateRunControl(runControl, /*isSwitch=*/true);
     });
+#endif
 
     connect(runControl, &QObject::destroyed, this, [this, runControl] {
         handleRunControlDestroyed(runControl);
