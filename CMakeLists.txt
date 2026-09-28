@@ -52,6 +52,8 @@ add_qtc_plugin(MultiFilterOutput
     src/patternlibrary.h
     src/projectpatterns.h
     src/projectpatterns.cpp
+    src/starterpatterns.h
+    src/starterpatterns.cpp
     src/patternlibrary.cpp
     src/patternlibrarysettingspage.h
     src/patternlibrarysettingspage.cpp
@@ -139,6 +141,10 @@ if(WITH_TESTS)
     SOURCES tests/tst_projectpatterns.cpp
     DEPENDS MultiFilterOutput
   )
+  add_qtc_test(tst_starterpatterns
+    SOURCES tests/tst_starterpatterns.cpp
+    DEPENDS MultiFilterOutput
+  )
   add_qtc_test(tst_runtracker
     SOURCES tests/tst_runtracker.cpp
     DEPENDS MultiFilterOutput QtCreator::ProjectExplorer
@@ -173,6 +179,7 @@ if(WITH_TESTS)
       tst_runtracker
       tst_patternexchange
       tst_projectpatterns
+      tst_starterpatterns
       PROPERTIES ENVIRONMENT_MODIFICATION "${QtCreatorPathModification}"
     )
   endif()
