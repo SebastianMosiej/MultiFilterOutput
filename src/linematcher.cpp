@@ -6,6 +6,8 @@
 #include <QHash>
 #include <QRegularExpression>
 
+#include <optional>
+
 namespace MultiFilterOutput {
 
 RegexCache::RegexCache(qsizetype capacity)
@@ -46,27 +48,33 @@ const QRegularExpression &compiledRegex(const QString &patternText, bool caseSen
     return cache.get(patternText, caseSensitive);
 }
 
+// Whether `text` occurs in `line`, read the way `pattern` reads its texts (regex or plain,
+// its case sensitivity); nullopt for an invalid regex.
+std::optional<bool> containsText(const Pattern &pattern, const QString &text, const QString &line)
+{
+    if (pattern.isRegex) {
+        const QRegularExpression &re = compiledRegex(text, pattern.caseSensitive);
+        if (!re.isValid())
+            return std::nullopt;
+        return re.match(line).hasMatch();
+    }
+    return line.contains(text, pattern.caseSensitive ? Qt::CaseSensitive : Qt::CaseInsensitive);
+}
+
 } // namespace
 
 bool lineMatches(const Pattern &pattern, const QString &line)
 {
-    bool matched = false;
-    if (pattern.isRegex) {
-        const QRegularExpression &re = compiledRegex(pattern.patternText, pattern.caseSensitive);
-        // The Pattern Library editor refuses to save an uncompilable regex, but a
-        // hand-edited QtCreator.ini can still produce one. QRegularExpression::match()
-        // would then warn on every single output line, so fail safe instead: treat an
-        // invalid pattern as one that never matches, which is exactly what returning
-        // pattern.invert (i.e. "false != invert") means.
-        if (!re.isValid())
-            return pattern.invert;
-        matched = re.match(line).hasMatch();
-    } else {
-        const Qt::CaseSensitivity cs = pattern.caseSensitive ? Qt::CaseSensitive
-                                                             : Qt::CaseInsensitive;
-        matched = line.contains(pattern.patternText, cs);
-    }
-    return matched != pattern.invert;
+    // The Pattern Library editor refuses to save an uncompilable regex, but a hand-edited
+    // QtCreator.ini can still produce one. QRegularExpression::match() would then warn on
+    // every single output line, so fail safe instead: an invalid pattern never matches (and
+    // so, inverted, takes every line) ...
+    const bool matched = containsText(pattern, pattern.patternText, line).value_or(false);
+    if (matched == pattern.invert)
+        return false;
+    // ... and an invalid exclude excludes nothing.
+    return pattern.excludeText.isEmpty()
+           || !containsText(pattern, pattern.excludeText, line).value_or(false);
 }
 
 SlowMatchBreaker::SlowMatchBreaker(std::chrono::milliseconds slowThreshold, int maxStrikes)

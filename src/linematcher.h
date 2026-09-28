@@ -16,10 +16,10 @@ class Pattern;
 
 // Compiled regular expressions, keyed by the two things that affect compilation: the pattern
 // text and case sensitivity. Bounded: when a new entry would exceed the capacity, the cache
-// starts over empty. The working set (at most two regexes per enabled pattern) must stay
-// below the capacity: every line is matched against all of them in turn, so a working set
-// larger than the capacity would miss -- and recompile -- on every lookup (LRU eviction
-// wouldn't help; cyclic access defeats it too). The default takes 500+ enabled patterns to
+// starts over empty. The working set (at most three regexes per enabled pattern: the pattern,
+// its exclude and its continuation pattern) must stay below the capacity: every line is
+// matched against all of them in turn, so a working set larger than the capacity would miss -- and recompile -- on every lookup (LRU eviction
+// wouldn't help; cyclic access defeats it too). The default takes 340+ enabled patterns to
 // reach, at a few MB of compiled expressions, so in practice this only discards entries left
 // behind by edited or deleted patterns -- which an unbounded cache would keep forever.
 class MULTIFILTEROUTPUT_EXPORT RegexCache

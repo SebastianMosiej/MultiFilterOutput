@@ -14,6 +14,10 @@ class tst_LineMatcher : public QObject
     Q_OBJECT
 
 private slots:
+    void excludeDropsOtherwiseMatchingLines();
+    void excludeFollowsRegexAndCaseSettings();
+    void excludeAppliesAfterInvert();
+    void invalidExcludeRegexExcludesNothing();
     void plainTextMatchCaseInsensitiveByDefault();
     void plainTextRespectsCaseSensitivity();
     void regexMatches();
@@ -327,6 +331,59 @@ void tst_LineMatcher::matchSpansEmptyWhenNothingToHighlight()
     Pattern empty;
     empty.isRegex = false;
     QCOMPARE(matchSpans(empty, "text"), Spans{});
+}
+
+void tst_LineMatcher::excludeDropsOtherwiseMatchingLines()
+{
+    Pattern p;
+    p.isRegex = false;
+    p.patternText = "ERROR";
+    p.excludeText = "ERROR: known flaky";
+    QVERIFY(lineMatches(p, "12:00 ERROR: disk full"));
+    QVERIFY(!lineMatches(p, "12:00 ERROR: known flaky test timed out"));
+    QVERIFY(!lineMatches(p, "12:00 INFO all good")); // exclude never adds lines
+}
+
+void tst_LineMatcher::excludeFollowsRegexAndCaseSettings()
+{
+    Pattern regex;
+    regex.isRegex = true;
+    regex.patternText = "ERROR";
+    regex.excludeText = "flaky|retrying";
+    QVERIFY(!lineMatches(regex, "ERROR retrying in 5s"));
+    QVERIFY(!lineMatches(regex, "ERROR Flaky")); // case-insensitive, like the pattern
+    QVERIFY(lineMatches(regex, "ERROR flak"));
+
+    Pattern plain = regex;
+    plain.isRegex = false;
+    QVERIFY(lineMatches(plain, "ERROR retrying in 5s")); // "flaky|retrying" as literal text
+    QVERIFY(!lineMatches(plain, "ERROR flaky|retrying"));
+
+    Pattern sensitive = regex;
+    sensitive.caseSensitive = true;
+    QVERIFY(lineMatches(sensitive, "ERROR Flaky"));
+}
+
+// "Everything except DEBUG, and except heartbeats": exclude narrows what invert lets through.
+void tst_LineMatcher::excludeAppliesAfterInvert()
+{
+    Pattern p;
+    p.isRegex = false;
+    p.patternText = "DEBUG";
+    p.invert = true;
+    p.excludeText = "heartbeat";
+    QVERIFY(lineMatches(p, "INFO started"));
+    QVERIFY(!lineMatches(p, "DEBUG detail"));
+    QVERIFY(!lineMatches(p, "INFO heartbeat"));
+}
+
+void tst_LineMatcher::invalidExcludeRegexExcludesNothing()
+{
+    Pattern p;
+    p.isRegex = true;
+    p.patternText = "ERROR";
+    p.excludeText = "([unterminated";
+    QVERIFY(lineMatches(p, "ERROR ([unterminated"));
 }
 
 QTEST_GUILESS_MAIN(tst_LineMatcher)

@@ -17,6 +17,7 @@ private slots:
     void channelsDefaultToAllAndRoundTrip();
     void channelOfSortsFormats();
     void looksAtOnlyItsChannels();
+    void excludeTextDefaultsEmptyAndRoundTrips();
 };
 
 void tst_Pattern::roundTripsThroughMap()
@@ -120,6 +121,16 @@ void tst_Pattern::looksAtOnlyItsChannels()
     QVERIFY(p.looksAt(Utils::StdOutFormat));
     QVERIFY(!p.looksAt(Utils::StdErrFormat));
     QVERIFY(!p.looksAt(Utils::NormalMessageFormat));
+}
+
+void tst_Pattern::excludeTextDefaultsEmptyAndRoundTrips()
+{
+    QVERIFY(Pattern().excludeText.isEmpty());
+    QVERIFY(Pattern::fromMap({{"id", "x"}}).excludeText.isEmpty());
+
+    Pattern p;
+    p.excludeText = "known flaky";
+    QCOMPARE(Pattern::fromMap(p.toMap()).excludeText, QStringLiteral("known flaky"));
 }
 
 #include "tst_pattern.moc"

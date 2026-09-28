@@ -17,6 +17,10 @@ public:
     QString id;
     QString name;
     QString patternText;
+    // Lines matching this are left out even if they match patternText (e.g. "ERROR" but not
+    // "ERROR: known flaky"). Read like patternText -- regex or plain text, same case
+    // sensitivity -- and applied after invert. Empty (the default): excludes nothing.
+    QString excludeText;
     bool isRegex = true;
     bool caseSensitive = false;
     bool invert = false;

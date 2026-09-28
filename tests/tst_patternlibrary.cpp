@@ -282,6 +282,7 @@ void tst_PatternLibrary::roundTripKeepsEveryField()
     p.continuationPattern = "^\\s+";
     p.isDefault = true;
     p.channels = Pattern::StdErrChannel;
+    p.excludeText = "flaky";
     // Every field off its default: a field Pattern::toMap() has but save()/load() miss shows
     // up as a difference below.
     const QVariantMap fields = p.toMap();

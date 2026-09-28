@@ -53,6 +53,7 @@ private slots:
     void patternOnlySeesItsChannels();
     void otherChannelsDontTouchContinuationRuns();
     void lineOnNoPatternsChannelIsUnmatched();
+    void excludedLineStartsNoContinuationRun();
 };
 
 void tst_LineRouter::routesLinesToEveryMatchingPattern()
@@ -219,6 +220,18 @@ void tst_LineRouter::lineOnNoPatternsChannelIsUnmatched()
 
     QVERIFY(!router.route("from the app", Utils::StdOutFormat).unmatched);
     QVERIFY(router.route("from the app, on stderr", Utils::StdErrFormat).unmatched);
+}
+
+void tst_LineRouter::excludedLineStartsNoContinuationRun()
+{
+    Pattern errors = grouping(regexPattern("ERROR"));
+    errors.excludeText = "flaky";
+    LineRouter router({errors});
+
+    const LineRouter::Result excluded = router.route("ERROR flaky test", Utils::StdOutFormat);
+    QCOMPARE(excluded.routes, Routes{});
+    QVERIFY(excluded.unmatched);
+    QCOMPARE(router.route("  its trace", Utils::StdOutFormat).routes, Routes{});
 }
 
 QTEST_GUILESS_MAIN(tst_LineRouter)

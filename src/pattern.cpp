@@ -35,6 +35,7 @@ QVariantMap Pattern::toMap() const
         {"id", id},
         {"name", name},
         {"patternText", patternText},
+        {"excludeText", excludeText},
         {"isRegex", isRegex},
         {"caseSensitive", caseSensitive},
         {"invert", invert},
@@ -52,6 +53,7 @@ Pattern Pattern::fromMap(const QVariantMap &map)
     p.id = map.value("id").toString();
     p.name = map.value("name").toString();
     p.patternText = map.value("patternText").toString();
+    p.excludeText = map.value("excludeText").toString();
     p.isRegex = map.value("isRegex", true).toBool();
     p.caseSensitive = map.value("caseSensitive", false).toBool();
     p.invert = map.value("invert", false).toBool();
