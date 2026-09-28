@@ -263,7 +263,8 @@ survives reinstalling it — on Windows:
 ```
 
 That last directory is named after the **plugin API version** (`20.0.82`),
-not the `21.0.0-beta1` display version — Qt Creator scans
+not the `21.0.0-beta1` display version; for Qt Creator 20.x it is
+`20.0.0`. Qt Creator scans
 `<major>.<minor>.<patch>` directories down to its own compatibility
 version. Alternatively, launch Qt Creator with `-pluginpath` pointed at the
 build output, which is what the `RunQtCreator` target does.
