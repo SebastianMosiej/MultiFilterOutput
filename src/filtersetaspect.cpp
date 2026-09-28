@@ -56,9 +56,16 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *bc)
     // PatternLibrary::patternsRemoved()); an id the library merely doesn't know is kept.
     // patternsRemoved() precedes the patternsChanged() for the same change, so the config
     // widget's checkbox rebuild below already sees the pruned selection.
+    // A pattern the project still shares under the same id (Share with Project, then the
+    // personal copy deleted) is still there, so it stays selected.
     connect(&patternLibrary(), &PatternLibrary::patternsRemoved, this, [this](const QStringList &ids) {
-        for (const QString &id : ids)
-            m_enabledPatternIds.removeAll(id);
+        const QList<Pattern> shared = projectPatterns().patterns(m_projectDirectory);
+        for (const QString &id : ids) {
+            const bool stillShared = std::any_of(
+                shared.cbegin(), shared.cend(), [&id](const Pattern &p) { return p.id == id; });
+            if (!stillShared)
+                m_enabledPatternIds.removeAll(id);
+        }
     });
 
     // The Run Settings page renders each RunConfiguration aspect via

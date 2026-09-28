@@ -33,6 +33,7 @@ private slots:
     void runSnapshotCarriesPatternsAndOverrides();
     void runSnapshotReadsAPlainIdList();
     void resolvedSettingFollowsGlobalUnlessOverridden();
+    void deletingALibraryPatternTheProjectStillHasKeepsIt();
 };
 
 void tst_FilterSetAspect::defaultsToEmpty()
@@ -294,6 +295,32 @@ void tst_FilterSetAspect::resolvedSettingFollowsGlobalUnlessOverridden()
     QVERIFY(!resolvedSetting(TriState::Default, false));
     QVERIFY(resolvedSetting(TriState::Enabled, false));
     QVERIFY(!resolvedSetting(TriState::Disabled, true));
+}
+
+// Share with Project, then delete the personal copy: the shared one is still there, under the
+// same id, and stays selected.
+void tst_FilterSetAspect::deletingALibraryPatternTheProjectStillHasKeepsIt()
+{
+    Pattern shared;
+    shared.id = "id-shared";
+    shared.name = "Shared";
+    Pattern mineOnly;
+    mineOnly.id = "id-mine";
+    patternLibrary().setPatterns({shared, mineOnly});
+    QTemporaryDir dir;
+    const Utils::FilePath project = Utils::FilePath::fromString(dir.path());
+    const Utils::FilePath file = ProjectPatterns::patternFile(project);
+    QVERIFY(file.parentDir().ensureWritableDir());
+    QVERIFY(file.writeFileContents(exportPatterns({shared})));
+    projectPatterns().addProject(project);
+    FilterSetAspect aspect(nullptr);
+    aspect.setProjectDirectory(project);
+    aspect.setEnabledPatternIds({"id-shared", "id-mine"});
+
+    patternLibrary().setPatterns({});
+
+    QCOMPARE(aspect.enabledPatternIds(), QStringList{"id-shared"});
+    projectPatterns().removeProject(project);
 }
 
 QTEST_GUILESS_MAIN(tst_FilterSetAspect)
