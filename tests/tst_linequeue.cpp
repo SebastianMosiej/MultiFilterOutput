@@ -23,6 +23,7 @@ private slots:
     void hopelessBacklogIsDiscardedWhenEnabled();
     void drainingBacklogIsKept();
     void sinkGetsTheTimeTheLineWasQueued();
+    void replayedLinesKeepTheirOriginalTime();
 };
 
 // Enqueuing must return straight away -- the whole point is that the caller (a RunControl
@@ -233,6 +234,18 @@ void tst_LineQueue::sinkGetsTheTimeTheLineWasQueued()
     QTRY_VERIFY(receivedAt != -1);
     QVERIFY2(receivedAt >= before && receivedAt <= after,
              qPrintable(QStringLiteral("%1 not in [%2, %3]").arg(receivedAt).arg(before).arg(after)));
+}
+
+// Replaying a run's earlier output (switching the pane to another run) must show when each
+// line originally arrived, not when it was replayed.
+void tst_LineQueue::replayedLinesKeepTheirOriginalTime()
+{
+    qint64 receivedAt = -1;
+    LineQueue queue([&](const QString &, Utils::OutputFormat, qint64 at) { receivedAt = at; });
+
+    queue.enqueue("old line", Utils::StdOutFormat, 1234567890123);
+
+    QTRY_COMPARE(receivedAt, 1234567890123);
 }
 
 QTEST_GUILESS_MAIN(tst_LineQueue)

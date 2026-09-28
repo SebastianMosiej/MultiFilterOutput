@@ -57,7 +57,9 @@ public:
     // take over a minute. Off by default, like the setting.
     void setDiscardExcessiveOutput(bool enabled);
 
-    void enqueue(const QString &line, Utils::OutputFormat format);
+    // receivedAt < 0 means now; replaying a run's earlier output passes the time each line
+    // originally arrived.
+    void enqueue(const QString &line, Utils::OutputFormat format, qint64 receivedAt = -1);
     // Drops every line not yet handed to the sink.
     void clear();
     bool isEmpty() const;

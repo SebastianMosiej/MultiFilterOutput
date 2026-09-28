@@ -58,9 +58,10 @@ void LineQueue::reportDiscards()
         m_discardedPending = 0;
 }
 
-void LineQueue::enqueue(const QString &line, Utils::OutputFormat format)
+void LineQueue::enqueue(const QString &line, Utils::OutputFormat format, qint64 receivedAt)
 {
-    m_queue.enqueue({line, format, QDateTime::currentMSecsSinceEpoch()});
+    m_queue.enqueue(
+        {line, format, receivedAt < 0 ? QDateTime::currentMSecsSinceEpoch() : receivedAt});
     m_queuedCharacters += line.size();
     if (m_queuedCharacters > m_maxQueuedCharacters) {
         // Oldest first, down to half the cap; the newest line always stays.
