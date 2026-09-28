@@ -22,6 +22,8 @@ private slots:
     void keepsIdsOfPatternsNotDeleted();
     void setPatternEnabledTogglesOneId();
     void selectionChangesAreSignalled();
+    void setPatternsEnabledTogglesSeveralAtOnce();
+    void setGroupEnabledTogglesEveryTaggedPattern();
 };
 
 void tst_FilterSetAspect::defaultsToEmpty()
@@ -141,6 +143,50 @@ void tst_FilterSetAspect::selectionChangesAreSignalled()
     QCOMPARE(changed.size(), 2);
     aspect.setPatternEnabled("id-b", true);
     QCOMPARE(changed.size(), 2);
+}
+
+void tst_FilterSetAspect::setPatternsEnabledTogglesSeveralAtOnce()
+{
+    FilterSetAspect aspect(nullptr);
+    aspect.setEnabledPatternIds({"id-a"});
+    QSignalSpy changed(&aspect, &Utils::BaseAspect::changed);
+
+    aspect.setPatternsEnabled({"id-b", "id-a", "id-c"}, true);
+    QCOMPARE(aspect.enabledPatternIds(), (QStringList{"id-a", "id-b", "id-c"}));
+    QCOMPARE(changed.size(), 1);
+
+    aspect.setPatternsEnabled({"id-a", "id-c"}, false);
+    QCOMPARE(aspect.enabledPatternIds(), QStringList{"id-b"});
+    QCOMPARE(changed.size(), 2);
+
+    aspect.setPatternsEnabled({"id-a"}, false); // nothing to do
+    QCOMPARE(changed.size(), 2);
+}
+
+void tst_FilterSetAspect::setGroupEnabledTogglesEveryTaggedPattern()
+{
+    Pattern a;
+    a.id = "id-a";
+    a.tags = {"net"};
+    Pattern b;
+    b.id = "id-b";
+    b.tags = {"db", "net"};
+    Pattern c;
+    c.id = "id-c";
+    patternLibrary().setPatterns({a, b, c});
+    FilterSetAspect aspect(nullptr);
+    aspect.setEnabledPatternIds({"id-c"});
+    QSignalSpy changed(&aspect, &Utils::BaseAspect::changed);
+
+    aspect.setGroupEnabled("net", true);
+    QCOMPARE(aspect.enabledPatternIds(), (QStringList{"id-c", "id-a", "id-b"}));
+    aspect.setGroupEnabled("db", false);
+    QCOMPARE(aspect.enabledPatternIds(), (QStringList{"id-c", "id-a"}));
+    QCOMPARE(changed.size(), 2);
+
+    aspect.setGroupEnabled("no such group", true);
+    QCOMPARE(changed.size(), 2);
+    patternLibrary().setPatterns({});
 }
 
 QTEST_GUILESS_MAIN(tst_FilterSetAspect)

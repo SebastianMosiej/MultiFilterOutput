@@ -144,12 +144,24 @@ void FilterSetAspect::setEnabledPatternIds(const QStringList &ids)
 
 void FilterSetAspect::setPatternEnabled(const QString &id, bool enabled)
 {
-    QStringList ids = m_enabledPatternIds;
-    if (enabled && !ids.contains(id))
-        ids.append(id);
-    else if (!enabled)
-        ids.removeAll(id);
-    setEnabledPatternIds(ids);
+    setPatternsEnabled({id}, enabled);
+}
+
+void FilterSetAspect::setPatternsEnabled(const QStringList &ids, bool enabled)
+{
+    QStringList enabledIds = m_enabledPatternIds;
+    for (const QString &id : ids) {
+        if (enabled && !enabledIds.contains(id))
+            enabledIds.append(id);
+        else if (!enabled)
+            enabledIds.removeAll(id);
+    }
+    setEnabledPatternIds(enabledIds);
+}
+
+void FilterSetAspect::setGroupEnabled(const QString &tag, bool enabled)
+{
+    setPatternsEnabled(patternIdsWithTag(patternLibrary().patterns(), tag), enabled);
 }
 
 QVariant FilterSetAspect::variantValue() const

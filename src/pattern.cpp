@@ -2,6 +2,8 @@
 
 #include <QUuid>
 
+#include <algorithm>
+
 namespace MultiFilterOutput {
 
 Pattern::Channel Pattern::channelOf(Utils::OutputFormat format)
@@ -19,6 +21,51 @@ Pattern::Channel Pattern::channelOf(Utils::OutputFormat format)
 bool Pattern::looksAt(Utils::OutputFormat format) const
 {
     return channels.testFlag(channelOf(format));
+}
+
+QStringList Pattern::normalizedTags(const QStringList &tags)
+{
+    // Commas separate tags where they are typed (see tagsFromText()), so one inside a tag
+    // (hand-edited settings) splits it.
+    QStringList result;
+    for (const QString &tag : tags) {
+        for (const QString &part : tag.split(u',')) {
+            const QString trimmed = part.trimmed();
+            if (!trimmed.isEmpty() && !result.contains(trimmed))
+                result.append(trimmed);
+        }
+    }
+    return result;
+}
+
+QStringList Pattern::tagsFromText(const QString &text)
+{
+    return normalizedTags({text});
+}
+
+QStringList patternTags(const QList<Pattern> &patterns)
+{
+    QStringList tags;
+    for (const Pattern &pattern : patterns) {
+        for (const QString &tag : pattern.tags) {
+            if (!tags.contains(tag))
+                tags.append(tag);
+        }
+    }
+    std::sort(tags.begin(), tags.end(), [](const QString &a, const QString &b) {
+        return a.compare(b, Qt::CaseInsensitive) < 0;
+    });
+    return tags;
+}
+
+QStringList patternIdsWithTag(const QList<Pattern> &patterns, const QString &tag)
+{
+    QStringList ids;
+    for (const Pattern &pattern : patterns) {
+        if (pattern.tags.contains(tag))
+            ids.append(pattern.id);
+    }
+    return ids;
 }
 
 Pattern Pattern::createNew()
@@ -46,6 +93,7 @@ QVariantMap Pattern::toMap() const
         {"contextBefore", contextBefore},
         {"contextAfter", contextAfter},
         {"isDefault", isDefault},
+        {"tags", tags},
         {"channels", int(channels.toInt())},
     };
 }
@@ -67,6 +115,7 @@ Pattern Pattern::fromMap(const QVariantMap &map)
     p.groupContinuationLines = map.value("groupContinuationLines", false).toBool();
     p.continuationPattern = map.value("continuationPattern", QStringLiteral("^ {1,3}")).toString();
     p.isDefault = map.value("isDefault", false).toBool();
+    p.tags = normalizedTags(map.value("tags").toStringList());
     p.contextBefore = qBound(0, map.value("contextBefore", 0).toInt(), MaxContextLines);
     p.contextAfter = qBound(0, map.value("contextAfter", 0).toInt(), MaxContextLines);
     // Absent in settings from before channels existed; none at all (or only unknown bits)

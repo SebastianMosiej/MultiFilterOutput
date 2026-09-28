@@ -20,6 +20,10 @@ private slots:
     void excludeTextDefaultsEmptyAndRoundTrips();
     void wholeWordDefaultsOffAndRoundTrips();
     void contextLinesDefaultToNoneRoundTripAndAreBounded();
+    void tagsDefaultEmptyRoundTripAndAreNormalized();
+    void tagsFromTextSplitsOnCommas();
+    void patternTagsListsEachTagOnceSorted();
+    void patternIdsWithTagFollowsLibraryOrder();
 };
 
 void tst_Pattern::roundTripsThroughMap()
@@ -161,6 +165,51 @@ void tst_Pattern::contextLinesDefaultToNoneRoundTripAndAreBounded()
     const Pattern wild = Pattern::fromMap({{"contextBefore", -3}, {"contextAfter", 100000}});
     QCOMPARE(wild.contextBefore, 0);
     QCOMPARE(wild.contextAfter, Pattern::MaxContextLines);
+}
+
+void tst_Pattern::tagsDefaultEmptyRoundTripAndAreNormalized()
+{
+    QVERIFY(Pattern().tags.isEmpty());
+    QVERIFY(Pattern::fromMap({{"id", "x"}}).tags.isEmpty());
+
+    Pattern p;
+    p.tags = {"net", "db"};
+    QCOMPARE(Pattern::fromMap(p.toMap()).tags, (QStringList{"net", "db"}));
+
+    // Hand-edited settings -- and QSettings' INI format reads a one-item list back as a string.
+    QCOMPARE(
+        Pattern::fromMap({{"tags", QStringList{" net ", "", "net", "d,b"}}}).tags,
+        (QStringList{"net", "d", "b"}));
+    QCOMPARE(Pattern::fromMap({{"tags", QString("net")}}).tags, QStringList{"net"});
+}
+
+void tst_Pattern::tagsFromTextSplitsOnCommas()
+{
+    QCOMPARE(Pattern::tagsFromText(" net, db,,net "), (QStringList{"net", "db"}));
+    QVERIFY(Pattern::tagsFromText("  ").isEmpty());
+}
+
+static Pattern tagged(const QString &id, const QStringList &tags)
+{
+    Pattern p;
+    p.id = id;
+    p.tags = tags;
+    return p;
+}
+
+void tst_Pattern::patternTagsListsEachTagOnceSorted()
+{
+    QCOMPARE(
+        patternTags({tagged("a", {"net", "Db"}), tagged("b", {}), tagged("c", {"net", "cache"})}),
+        (QStringList{"cache", "Db", "net"}));
+}
+
+void tst_Pattern::patternIdsWithTagFollowsLibraryOrder()
+{
+    const QList<Pattern> patterns{
+        tagged("a", {"net"}), tagged("b", {"db"}), tagged("c", {"db", "net"})};
+    QCOMPARE(patternIdsWithTag(patterns, "net"), (QStringList{"a", "c"}));
+    QVERIFY(patternIdsWithTag(patterns, "nope").isEmpty());
 }
 
 #include "tst_pattern.moc"

@@ -24,6 +24,10 @@ public:
     // setEnabledPatternIds(), emits changed() when the selection actually changes, so an open
     // Run Settings page shows it.
     void setPatternEnabled(const QString &id, bool enabled);
+    // The same for several patterns at once (one changed() at most).
+    void setPatternsEnabled(const QStringList &ids, bool enabled);
+    // ... and for every pattern in the library tagged `tag` (see Pattern::tags).
+    void setGroupEnabled(const QString &tag, bool enabled);
 
     QVariant variantValue() const override;
 

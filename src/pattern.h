@@ -7,6 +7,7 @@
 #include <QColor>
 #include <QFlags>
 #include <QString>
+#include <QStringList>
 #include <QVariantMap>
 
 namespace MultiFilterOutput {
@@ -46,6 +47,12 @@ public:
     // When set, FilterSetAspect enables this pattern by default for every newly created run
     // configuration (not for ones already saved -- see FilterSetAspect::FilterSetAspect()).
     bool isDefault = false;
+    // Groups this pattern belongs to, so a run configuration (or the pane) can switch a whole
+    // group on or off at once. Kept normalized: trimmed, non-empty, no commas, each once.
+    QStringList tags;
+    static QStringList normalizedTags(const QStringList &tags);
+    // "net, db" as typed in the Pattern Library editor.
+    static QStringList tagsFromText(const QString &text);
 
     // Which output a pattern looks at. A line from any other channel is invisible to it: not
     // matched, not swept in as a continuation line, and not ending a continuation run.
@@ -69,5 +76,11 @@ public:
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(Pattern::Channels)
+
+// Every tag used by `patterns`, each once, sorted case-insensitively -- the groups on offer.
+MULTIFILTEROUTPUT_EXPORT QStringList patternTags(const QList<Pattern> &patterns);
+// The ids of the patterns tagged `tag`, in library order.
+MULTIFILTEROUTPUT_EXPORT QStringList patternIdsWithTag(
+    const QList<Pattern> &patterns, const QString &tag);
 
 } // namespace MultiFilterOutput
