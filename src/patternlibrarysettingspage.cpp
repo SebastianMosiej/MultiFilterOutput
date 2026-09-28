@@ -256,6 +256,12 @@ public:
         // selecting a row loads it here, and edits apply live -- see fieldEdited().
         m_nameEdit = new QLineEdit(this);
         m_patternEdit = new QLineEdit(this);
+        m_excludeEdit = new QLineEdit(this);
+        m_excludeEdit->setPlaceholderText(Tr::tr("Optional"));
+        m_excludeEdit->setToolTip(
+            Tr::tr("Leaves out lines that match this, even if they match the pattern -- e.g. "
+                   "\"ERROR\" except \"ERROR: known flaky\". Read like the pattern: regular "
+                   "expression or plain text, same case sensitivity."));
         m_regexCheck = new QCheckBox(Tr::tr("Regular expression"), this);
         m_caseSensitiveCheck = new QCheckBox(Tr::tr("Case sensitive"), this);
         m_invertCheck = new QCheckBox(Tr::tr("Exclude matching lines (invert)"), this);
@@ -288,6 +294,7 @@ public:
 
         connect(m_nameEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
         connect(m_patternEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
+        connect(m_excludeEdit, &QLineEdit::textChanged, this, &PatternLibraryWidget::fieldEdited);
         connect(m_regexCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_caseSensitiveCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_invertCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
@@ -317,6 +324,7 @@ public:
         auto *form = new QFormLayout;
         form->addRow(Tr::tr("Name:"), m_nameEdit);
         form->addRow(Tr::tr("Pattern:"), m_patternEdit);
+        form->addRow(Tr::tr("Except lines matching:"), m_excludeEdit);
         form->addRow(m_regexCheck);
         form->addRow(m_caseSensitiveCheck);
         form->addRow(m_invertCheck);
@@ -426,6 +434,7 @@ private:
     {
         m_nameEdit->setEnabled(enabled);
         m_patternEdit->setEnabled(enabled);
+        m_excludeEdit->setEnabled(enabled);
         m_regexCheck->setEnabled(enabled);
         m_caseSensitiveCheck->setEnabled(enabled);
         m_invertCheck->setEnabled(enabled);
@@ -522,6 +531,7 @@ private:
             m_updatingFields = true;
             m_nameEdit->clear();
             m_patternEdit->clear();
+            m_excludeEdit->clear();
             m_regexCheck->setChecked(false);
             m_caseSensitiveCheck->setChecked(false);
             m_invertCheck->setChecked(false);
@@ -549,6 +559,7 @@ private:
         m_updatingFields = true;
         m_nameEdit->setText(pattern->name);
         m_patternEdit->setText(pattern->patternText);
+        m_excludeEdit->setText(pattern->excludeText);
         m_regexCheck->setChecked(pattern->isRegex);
         m_caseSensitiveCheck->setChecked(pattern->caseSensitive);
         m_invertCheck->setChecked(pattern->invert);
@@ -610,6 +621,13 @@ private:
             }
         }
 
+        const QString excludeText = m_excludeEdit->text();
+        if (valid && m_regexCheck->isChecked() && !excludeText.isEmpty()
+            && !QRegularExpression(excludeText).isValid()) {
+            valid = false;
+            error = Tr::tr("Exclude expression is not a valid regular expression.");
+        }
+
         Pattern::Channels channels;
         channels.setFlag(Pattern::StdOutChannel, m_stdOutCheck->isChecked());
         channels.setFlag(Pattern::StdErrChannel, m_stdErrCheck->isChecked());
@@ -627,6 +645,7 @@ private:
         updated.id = m_currentId;
         updated.name = m_nameEdit->text();
         updated.patternText = text;
+        updated.excludeText = excludeText;
         updated.isRegex = m_regexCheck->isChecked();
         updated.caseSensitive = m_caseSensitiveCheck->isChecked();
         updated.invert = m_invertCheck->isChecked();
@@ -651,6 +670,7 @@ private:
     PatternTreeWidget *m_tree;
     QLineEdit *m_nameEdit;
     QLineEdit *m_patternEdit;
+    QLineEdit *m_excludeEdit;
     QCheckBox *m_regexCheck;
     QCheckBox *m_caseSensitiveCheck;
     QCheckBox *m_invertCheck;

@@ -194,6 +194,13 @@ QStringList validatePatterns(QList<Pattern> &patterns)
                             .arg(name);
         }
 
+        if (p.isRegex && !p.excludeText.isEmpty()
+            && !QRegularExpression(p.excludeText).isValid()) {
+            problems << Tr::tr("Pattern \"%1\" has an exclude expression that is not a valid "
+                               "regular expression, so it excludes nothing.")
+                            .arg(name);
+        }
+
         if (p.groupContinuationLines
             && (p.continuationPattern.isEmpty()
                 || !QRegularExpression(p.continuationPattern).isValid())) {

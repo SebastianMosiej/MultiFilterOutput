@@ -12,6 +12,10 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   matches"), a tab color, and an order (drag-and-drop or **Move Up**/**Move
   Down**) that also determines each pattern's left-to-right tab position.
   Managed under **Tools > Options > MultiFilterOutput > Pattern Library**.
+- **Exclusions within a pattern** — *Except lines matching* leaves lines out of
+  a pattern's tab even when they match it: `ERROR` except `ERROR: known
+  flaky`. Read like the pattern (regex or plain text, same case sensitivity);
+  with an inverted pattern it narrows what gets through further.
 - **Match by output channel** — each pattern can look at standard output,
   standard error and/or Qt Creator's own messages (*Starting ...*, *... exited
   with code 0*); all three by default. Lines from other channels are invisible

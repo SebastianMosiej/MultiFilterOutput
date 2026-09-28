@@ -218,13 +218,17 @@ void tst_PatternLibrary::invalidRegexesAreReported()
     unusedContinuation.continuationPattern = "([unterminated";
     Pattern plainText = makePattern("id-4", "Plain", "([not a regex");
     plainText.isRegex = false;
-    QList<Pattern> patterns{badMain, badContinuation, unusedContinuation, plainText};
+    plainText.excludeText = "([not a regex either";
+    Pattern badExclude = makePattern("id-5", "BadExclude", "ok");
+    badExclude.excludeText = "([unterminated";
+    QList<Pattern> patterns{badMain, badContinuation, unusedContinuation, plainText, badExclude};
 
     const QStringList problems = validatePatterns(patterns);
 
-    QCOMPARE(problems.size(), 2);
+    QCOMPARE(problems.size(), 3);
     QVERIFY(problems.at(0).contains("BadMain"));
     QVERIFY(problems.at(1).contains("BadCont"));
+    QVERIFY(problems.at(2).contains("BadExclude"));
 }
 
 // Reads back what `settings` holds, the way the next Qt Creator session would.
