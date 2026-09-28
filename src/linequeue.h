@@ -68,6 +68,9 @@ public:
     // (always at least one line), and reschedules itself if lines remain. Returns how many
     // lines it processed. Driven by the internal timer; public so tests can run one slice.
     int processPending();
+    // Hands every queued line to the sink right now, however long that takes -- for when what
+    // is queued must be in the tabs before they change (a new run keeping the old output).
+    void flushAll();
 
 private:
     bool isHopelesslyBehind();

@@ -422,8 +422,13 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     // A new run (or Re-run) may keep the previous run's output, greyed out above it, like
     // Application Output (see keepsOldRunOutput()). Not on a switch: the tabs then show the
     // run switched to, from its own history.
-    const bool keepOld = activeRunControl && !m_runTracker->lastActivationWasSwitch()
-                         && keepsOldRunOutput() && !m_allTab->document()->isEmpty();
+    const bool keepingOld = activeRunControl && !m_runTracker->lastActivationWasSwitch()
+                            && keepsOldRunOutput();
+    // The old run's last lines may still be queued -- among them the unterminated last line
+    // flushed when it stopped: into All with them, to be kept with the rest.
+    if (keepingOld)
+        m_lineQueue->flushAll();
+    const bool keepOld = keepingOld && !m_allTab->document()->isEmpty();
 
     removePatternTabs();
     // Lines still queued belong to the run being replaced (or to the tab set being torn

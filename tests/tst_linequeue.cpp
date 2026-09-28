@@ -12,6 +12,7 @@ class tst_LineQueue : public QObject
     Q_OBJECT
 
 private slots:
+    void flushAllHandsOverEverythingAtOnce();
     void linesReachSinkFromEventLoopInOrder();
     void oneSliceStopsAtTimeBudget();
     void clearDropsPendingLines();
@@ -246,6 +247,23 @@ void tst_LineQueue::replayedLinesKeepTheirOriginalTime()
     queue.enqueue("old line", Utils::StdOutFormat, 1234567890123);
 
     QTRY_COMPARE(receivedAt, 1234567890123);
+}
+
+void tst_LineQueue::flushAllHandsOverEverythingAtOnce()
+{
+    QStringList received;
+    // A budget no slice could meet: processPending() would take one line at a time.
+    LineQueue queue(
+        [&](const QString &line, Utils::OutputFormat, qint64) { received << line; },
+        std::chrono::milliseconds(0));
+    for (int i = 0; i < 100; ++i)
+        queue.enqueue(QString::number(i), Utils::StdOutFormat);
+
+    queue.flushAll();
+
+    QCOMPARE(received.size(), 100);
+    QCOMPARE(received.last(), QStringLiteral("99"));
+    QVERIFY(queue.isEmpty());
 }
 
 QTEST_GUILESS_MAIN(tst_LineQueue)

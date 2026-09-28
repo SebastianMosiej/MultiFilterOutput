@@ -74,6 +74,18 @@ void LineQueue::enqueue(const QString &line, Utils::OutputFormat format, qint64 
         m_timer.start();
 }
 
+void LineQueue::flushAll()
+{
+    while (!m_queue.isEmpty()) {
+        reportDiscards(); // everything dropped came before whatever is still queued
+        const auto [line, format, receivedAt] = m_queue.dequeue();
+        m_queuedCharacters -= line.size();
+        m_sink(line, format, receivedAt);
+    }
+    reportDiscards();
+    m_timer.stop();
+}
+
 void LineQueue::clear()
 {
     m_queue.clear();
