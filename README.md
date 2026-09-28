@@ -12,6 +12,11 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   matches"), a tab color, and an order (drag-and-drop or **Move Up**/**Move
   Down**) that also determines each pattern's left-to-right tab position.
   Managed under **Tools > Options > MultiFilterOutput > Pattern Library**.
+- **Match by output channel** — each pattern can look at standard output,
+  standard error and/or Qt Creator's own messages (*Starting ...*, *... exited
+  with code 0*); all three by default. Lines from other channels are invisible
+  to it, so interleaved stdout neither joins nor cuts short a stderr stack
+  trace being grouped as continuation lines.
 - **Continuation-line grouping** — for patterns whose real-world matches
   span multiple lines (an error followed by an indented stack trace or file
   excerpt), turn on **Group continuation lines** and lines that match a

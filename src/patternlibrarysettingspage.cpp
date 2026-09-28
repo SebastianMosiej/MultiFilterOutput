@@ -262,6 +262,12 @@ public:
         m_defaultCheck = new QCheckBox(
             Tr::tr("Active by default for new run configurations"), this);
         m_groupContinuationCheck = new QCheckBox(Tr::tr("Group continuation lines"), this);
+        m_stdOutCheck = new QCheckBox(Tr::tr("Standard output"), this);
+        m_stdErrCheck = new QCheckBox(Tr::tr("Standard error"), this);
+        m_messagesCheck = new QCheckBox(Tr::tr("Qt Creator messages"), this);
+        m_messagesCheck->setToolTip(
+            Tr::tr("Lines Qt Creator adds itself, such as \"Starting ...\" and \"... exited "
+                   "with code 0\"."));
         m_continuationPatternEdit = new QLineEdit(Pattern().continuationPattern, this);
         m_colorButton = new QPushButton(Tr::tr("Choose..."), this);
         m_errorLabel = new QLabel(this);
@@ -286,6 +292,8 @@ public:
         connect(m_caseSensitiveCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_invertCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_defaultCheck, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
+        for (QCheckBox *check : {m_stdOutCheck, m_stdErrCheck, m_messagesCheck})
+            connect(check, &QCheckBox::toggled, this, &PatternLibraryWidget::fieldEdited);
         connect(m_groupContinuationCheck, &QCheckBox::toggled, this, [this](bool) {
             updateContinuationFieldEnabled();
             fieldEdited();
@@ -300,12 +308,19 @@ public:
         continuationCheckRow->addWidget(continuationInfoLabel);
         continuationCheckRow->addStretch();
 
+        auto *channelsRow = new QHBoxLayout;
+        channelsRow->addWidget(m_stdOutCheck);
+        channelsRow->addWidget(m_stdErrCheck);
+        channelsRow->addWidget(m_messagesCheck);
+        channelsRow->addStretch();
+
         auto *form = new QFormLayout;
         form->addRow(Tr::tr("Name:"), m_nameEdit);
         form->addRow(Tr::tr("Pattern:"), m_patternEdit);
         form->addRow(m_regexCheck);
         form->addRow(m_caseSensitiveCheck);
         form->addRow(m_invertCheck);
+        form->addRow(Tr::tr("Look at:"), channelsRow);
         form->addRow(m_defaultCheck);
         form->addRow(continuationCheckRow);
         form->addRow(Tr::tr("Continuation line starts with:"), m_continuationPatternEdit);
@@ -415,6 +430,8 @@ private:
         m_caseSensitiveCheck->setEnabled(enabled);
         m_invertCheck->setEnabled(enabled);
         m_defaultCheck->setEnabled(enabled);
+        for (QCheckBox *check : {m_stdOutCheck, m_stdErrCheck, m_messagesCheck})
+            check->setEnabled(enabled);
         m_groupContinuationCheck->setEnabled(enabled);
         m_colorButton->setEnabled(enabled);
         m_removeButton->setEnabled(enabled);
@@ -509,6 +526,8 @@ private:
             m_caseSensitiveCheck->setChecked(false);
             m_invertCheck->setChecked(false);
             m_defaultCheck->setChecked(false);
+            for (QCheckBox *check : {m_stdOutCheck, m_stdErrCheck, m_messagesCheck})
+                check->setChecked(true);
             m_groupContinuationCheck->setChecked(false);
             m_continuationPatternEdit->setText(Pattern().continuationPattern);
             m_currentColor = QColor();
@@ -534,6 +553,9 @@ private:
         m_caseSensitiveCheck->setChecked(pattern->caseSensitive);
         m_invertCheck->setChecked(pattern->invert);
         m_defaultCheck->setChecked(pattern->isDefault);
+        m_stdOutCheck->setChecked(pattern->channels.testFlag(Pattern::StdOutChannel));
+        m_stdErrCheck->setChecked(pattern->channels.testFlag(Pattern::StdErrChannel));
+        m_messagesCheck->setChecked(pattern->channels.testFlag(Pattern::MessagesChannel));
         m_groupContinuationCheck->setChecked(pattern->groupContinuationLines);
         m_continuationPatternEdit->setText(pattern->continuationPattern);
         updateColorButton();
@@ -588,6 +610,15 @@ private:
             }
         }
 
+        Pattern::Channels channels;
+        channels.setFlag(Pattern::StdOutChannel, m_stdOutCheck->isChecked());
+        channels.setFlag(Pattern::StdErrChannel, m_stdErrCheck->isChecked());
+        channels.setFlag(Pattern::MessagesChannel, m_messagesCheck->isChecked());
+        if (valid && !channels) {
+            valid = false;
+            error = Tr::tr("Choose at least one kind of output to look at.");
+        }
+
         m_errorLabel->setText(error);
         if (!valid)
             return;
@@ -600,6 +631,7 @@ private:
         updated.caseSensitive = m_caseSensitiveCheck->isChecked();
         updated.invert = m_invertCheck->isChecked();
         updated.isDefault = m_defaultCheck->isChecked();
+        updated.channels = channels;
         updated.groupContinuationLines = m_groupContinuationCheck->isChecked();
         updated.continuationPattern = m_continuationPatternEdit->text();
         updated.color = m_currentColor;
@@ -624,6 +656,9 @@ private:
     QCheckBox *m_invertCheck;
     QCheckBox *m_defaultCheck;
     QCheckBox *m_groupContinuationCheck;
+    QCheckBox *m_stdOutCheck;
+    QCheckBox *m_stdErrCheck;
+    QCheckBox *m_messagesCheck;
     QLineEdit *m_continuationPatternEdit;
     QPushButton *m_colorButton;
     QLabel *m_errorLabel;
