@@ -12,6 +12,8 @@
 #include <utils/detailswidget.h>
 
 #include <QCheckBox>
+#include <QComboBox>
+#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPointer>
@@ -70,9 +72,54 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *bc)
         auto *details = new Utils::DetailsWidget;
         details->setState(Utils::DetailsWidget::Collapsed);
 
+        // The overrides sit above the pattern list, outside what rebuild() below replaces.
+        auto *outer = new QWidget;
+        auto *outerLayout = new QVBoxLayout(outer);
+        outerLayout->setContentsMargins(0, 0, 0, 0);
+        auto *overrides = new QFormLayout;
+        const auto addOverride = [this, overrides](
+                                     const QString &label,
+                                     const QString &tooltip,
+                                     const QString &onText,
+                                     const QString &offText,
+                                     Utils::TriState (FilterSetAspect::*get)() const,
+                                     void (FilterSetAspect::*set)(Utils::TriState)) {
+            // Item order follows Utils::TriState's values: Enabled, Disabled, Default.
+            auto *combo = new QComboBox;
+            combo->addItems({onText, offText, Tr::tr("Default (as in Preferences)")});
+            combo->setToolTip(tooltip);
+            combo->setCurrentIndex((this->*get)().toInt());
+            connect(combo, &QComboBox::activated, this, [this, set](int index) {
+                (this->*set)(Utils::TriState::fromInt(index));
+            });
+            connect(this, &Utils::BaseAspect::changed, combo, [this, combo, get] {
+                const QSignalBlocker blocker(combo);
+                combo->setCurrentIndex((this->*get)().toInt());
+            });
+            overrides->addRow(label, combo);
+        };
+        addOverride(
+            Tr::tr("Show the pane on run start:"),
+            Tr::tr("Whether the MultiFilterOutput pane pops up when a run of this run "
+                   "configuration first prints something (Preferences > MultiFilterOutput)."),
+            Tr::tr("Yes"),
+            Tr::tr("No"),
+            &FilterSetAspect::focusOnRunStart,
+            &FilterSetAspect::setFocusOnRunStart);
+        addOverride(
+            Tr::tr("Unmatched tab:"),
+            Tr::tr("Whether runs of this run configuration get the Unmatched tab "
+                   "(Preferences > MultiFilterOutput)."),
+            Tr::tr("Show"),
+            Tr::tr("Hide"),
+            &FilterSetAspect::showUnmatchedTab,
+            &FilterSetAspect::setShowUnmatchedTab);
+        outerLayout->addLayout(overrides);
+
         auto *container = new QWidget;
         new QVBoxLayout(container);
-        details->setWidget(container);
+        outerLayout->addWidget(container);
+        details->setWidget(outer);
 
         auto updateSummary = [this, guard = QPointer<Utils::DetailsWidget>(details)] {
             if (!guard)
@@ -240,6 +287,54 @@ void FilterSetAspect::setGroupEnabled(const QString &tag, bool enabled)
     setPatternsEnabled(patternIdsWithTag(availablePatterns(), tag), enabled);
 }
 
+Utils::TriState FilterSetAspect::focusOnRunStart() const
+{
+    return m_focusOnRunStart;
+}
+
+void FilterSetAspect::setFocusOnRunStart(Utils::TriState value)
+{
+    if (value == m_focusOnRunStart)
+        return;
+    m_focusOnRunStart = value;
+    emit changed();
+}
+
+Utils::TriState FilterSetAspect::showUnmatchedTab() const
+{
+    return m_showUnmatchedTab;
+}
+
+void FilterSetAspect::setShowUnmatchedTab(Utils::TriState value)
+{
+    if (value == m_showUnmatchedTab)
+        return;
+    m_showUnmatchedTab = value;
+    emit changed();
+}
+
+RunFilterSettings runFilterSettings(const QVariant &aspectValue)
+{
+    // Before the overrides, the value was just the id list.
+    if (aspectValue.typeId() != QMetaType::QVariantMap)
+        return {aspectValue.toStringList()};
+    const QVariantMap map = aspectValue.toMap();
+    return {
+        map.value("patterns").toStringList(),
+        Utils::TriState::fromVariant(map.value("focusOnRunStart", Utils::TriState::Default.toVariant())),
+        Utils::TriState::fromVariant(map.value("showUnmatchedTab", Utils::TriState::Default.toVariant())),
+    };
+}
+
+bool resolvedSetting(Utils::TriState override, bool global)
+{
+    if (override == Utils::TriState::Enabled)
+        return true;
+    if (override == Utils::TriState::Disabled)
+        return false;
+    return global;
+}
+
 void FilterSetAspect::setProjectDirectory(const Utils::FilePath &projectDirectory)
 {
     m_projectDirectory = projectDirectory;
@@ -253,17 +348,27 @@ QList<Pattern> FilterSetAspect::availablePatterns() const
 
 QVariant FilterSetAspect::variantValue() const
 {
-    return m_enabledPatternIds;
+    return QVariantMap{
+        {"patterns", m_enabledPatternIds},
+        {"focusOnRunStart", m_focusOnRunStart.toVariant()},
+        {"showUnmatchedTab", m_showUnmatchedTab.toVariant()},
+    };
 }
 
 void FilterSetAspect::fromMap(const Utils::Store &map)
 {
     m_enabledPatternIds = map.value(Constants::FILTER_SET_ASPECT_ID).toStringList();
+    m_focusOnRunStart = Utils::TriState::fromVariant(
+        map.value(Constants::RUN_FOCUS_ON_RUN_START_KEY, Utils::TriState::Default.toVariant()));
+    m_showUnmatchedTab = Utils::TriState::fromVariant(
+        map.value(Constants::RUN_SHOW_UNMATCHED_TAB_KEY, Utils::TriState::Default.toVariant()));
 }
 
 void FilterSetAspect::toMap(Utils::Store &map) const
 {
     map.insert(Constants::FILTER_SET_ASPECT_ID, m_enabledPatternIds);
+    map.insert(Constants::RUN_FOCUS_ON_RUN_START_KEY, m_focusOnRunStart.toVariant());
+    map.insert(Constants::RUN_SHOW_UNMATCHED_TAB_KEY, m_showUnmatchedTab.toVariant());
 }
 
 } // namespace MultiFilterOutput

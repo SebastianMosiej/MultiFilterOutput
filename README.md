@@ -12,6 +12,10 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   matches"), a tab color, and an order (drag-and-drop or **Move Up**/**Move
   Down**) that also determines each pattern's left-to-right tab position.
   Managed under **Tools > Options > MultiFilterOutput > Pattern Library**.
+- **Per-run-configuration pane settings** — a run configuration's *Output
+  Filters* can override *Show the pane on run start* and the *Unmatched* tab
+  for its runs (Default follows Preferences), e.g. pop up for the app you
+  debug but not for a chatty helper.
 - **Project-shared patterns** — patterns in
   `<project>/.qtcreator/multifilteroutput-patterns.json` (the *Export...*
   format) are offered to that project's run configurations and in the pane,

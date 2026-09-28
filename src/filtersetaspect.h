@@ -32,12 +32,22 @@ public:
     // ... and for every pattern in the library tagged `tag` (see Pattern::tags).
     void setGroupEnabled(const QString &tag, bool enabled);
 
+    // Per-run-configuration overrides of the pane's global settings (Pattern Library page):
+    // Default follows the global setting, Enabled/Disabled override it for runs of this run
+    // configuration. Each emits changed() when it actually changes.
+    Utils::TriState focusOnRunStart() const;
+    void setFocusOnRunStart(Utils::TriState value);
+    Utils::TriState showUnmatchedTab() const;
+    void setShowUnmatchedTab(Utils::TriState value);
+
     // The project whose shared patterns (see ProjectPatterns) are offered next to the
     // library's -- the run configuration's project; set from the constructor.
     void setProjectDirectory(const Utils::FilePath &projectDirectory);
     // What this run configuration can choose from: see combinedPatterns().
     QList<Pattern> availablePatterns() const;
 
+    // What a run takes along (RunControl::aspectData<FilterSetAspect>()->value): see
+    // runFilterSettings().
     QVariant variantValue() const override;
 
     void fromMap(const Utils::Store &map) override;
@@ -46,6 +56,21 @@ public:
 private:
     QStringList m_enabledPatternIds;
     Utils::FilePath m_projectDirectory;
+    Utils::TriState m_focusOnRunStart = Utils::TriState::Default;
+    Utils::TriState m_showUnmatchedTab = Utils::TriState::Default;
 };
+
+// A run's launch-time snapshot of its run configuration's FilterSetAspect, read back from
+// the aspect data's value (a plain id list from before overrides existed also reads).
+struct RunFilterSettings
+{
+    QStringList patternIds;
+    Utils::TriState focusOnRunStart = Utils::TriState::Default;
+    Utils::TriState showUnmatchedTab = Utils::TriState::Default;
+};
+MULTIFILTEROUTPUT_EXPORT RunFilterSettings runFilterSettings(const QVariant &aspectValue);
+
+// The global setting, unless the override says otherwise.
+MULTIFILTEROUTPUT_EXPORT bool resolvedSetting(Utils::TriState override, bool global);
 
 } // namespace MultiFilterOutput

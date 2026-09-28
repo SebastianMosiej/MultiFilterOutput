@@ -1,5 +1,6 @@
 #pragma once
 
+#include "filtersetaspect.h"
 #include "linerouter.h"
 #include "outputtabwidget.h"
 #include "pattern.h"
@@ -59,6 +60,12 @@ private:
     void rebuildTabs(ProjectExplorer::RunControl *activeRunControl);
     // The pattern ids a run's configuration had enabled when it was launched.
     QStringList launchPatternIds(ProjectExplorer::RunControl *runControl) const;
+    // The run configuration's Output Filters as the run was launched with them.
+    RunFilterSettings launchSettings(ProjectExplorer::RunControl *runControl) const;
+    // The pane settings for the active run: global, unless its run configuration overrides
+    // them (see FilterSetAspect).
+    bool focusOnRunStart() const;
+    bool showUnmatchedTab() const;
     // The patterns filtering the active run (m_runPatternIds), in Pattern Library order.
     QList<Pattern> runPatterns() const;
     // What the active run can be filtered by: the library plus its project's shared patterns

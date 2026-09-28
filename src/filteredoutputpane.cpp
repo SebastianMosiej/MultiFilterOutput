@@ -538,8 +538,27 @@ QStringList FilteredOutputPane::launchPatternIds(RunControl *runControl) const
     // BuildConfiguration's activeRunConfiguration() instead would pick up whichever run
     // configuration happens to be active *now*, not the one this run was actually launched
     // from -- so we must read the RunControl's own snapshot here.
-    const auto *filterData = runControl->aspectData<FilterSetAspect>();
-    return filterData ? filterData->value.toStringList() : QStringList();
+    return launchSettings(runControl).patternIds;
+}
+
+RunFilterSettings FilteredOutputPane::launchSettings(RunControl *runControl) const
+{
+    const auto *filterData = runControl ? runControl->aspectData<FilterSetAspect>() : nullptr;
+    return filterData ? runFilterSettings(filterData->value) : RunFilterSettings();
+}
+
+bool FilteredOutputPane::focusOnRunStart() const
+{
+    return resolvedSetting(
+        launchSettings(m_runTracker->activeRunControl()).focusOnRunStart,
+        outputPaneSettings().focusPaneOnRunStart());
+}
+
+bool FilteredOutputPane::showUnmatchedTab() const
+{
+    return resolvedSetting(
+        launchSettings(m_runTracker->activeRunControl()).showUnmatchedTab,
+        outputPaneSettings().showUnmatchedTab());
 }
 
 QList<Pattern> FilteredOutputPane::runPatterns() const
@@ -712,7 +731,7 @@ void FilteredOutputPane::createPatternTabs(Project *project, const QList<Pattern
     const bool anyPicksLinesOut = std::any_of(patterns.cbegin(), patterns.cend(), [](const Pattern &p) {
         return !p.invert;
     });
-    if (outputPaneSettings().showUnmatchedTab() && anyPicksLinesOut) {
+    if (showUnmatchedTab() && anyPicksLinesOut) {
         Pattern unmatched;
         unmatched.id = QStringLiteral("MultiFilterOutput.Unmatched");
         unmatched.name = Tr::tr("Unmatched");
@@ -817,7 +836,7 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
         // call -- reaching OutputPaneManager after Application Output's, since RunTracker
         // connects to RunControl::appendMessage later than AppOutputPane does -- is the one
         // that ends up deciding which pane is actually shown for this run.
-        if (outputPaneSettings().focusPaneOnRunStart())
+        if (focusOnRunStart())
             popup(Core::IOutputPane::NoModeSwitch | Core::IOutputPane::WithFocus);
     }
 

@@ -28,6 +28,11 @@ private slots:
     void setPatternsEnabledTogglesSeveralAtOnce();
     void setGroupEnabledTogglesEveryTaggedPattern();
     void projectPatternsAreOfferedAndGrouped();
+    void overridesDefaultToDefaultAndRoundTripThroughMap();
+    void overrideChangesAreSignalled();
+    void runSnapshotCarriesPatternsAndOverrides();
+    void runSnapshotReadsAPlainIdList();
+    void resolvedSettingFollowsGlobalUnlessOverridden();
 };
 
 void tst_FilterSetAspect::defaultsToEmpty()
@@ -222,6 +227,73 @@ void tst_FilterSetAspect::projectPatternsAreOfferedAndGrouped()
 
     projectPatterns().removeProject(project);
     patternLibrary().setPatterns({});
+}
+
+using Utils::TriState;
+
+void tst_FilterSetAspect::overridesDefaultToDefaultAndRoundTripThroughMap()
+{
+    FilterSetAspect aspect(nullptr);
+    QCOMPARE(aspect.focusOnRunStart(), TriState::Default);
+    QCOMPARE(aspect.showUnmatchedTab(), TriState::Default);
+
+    aspect.setEnabledPatternIds({"id-1"});
+    aspect.setFocusOnRunStart(TriState::Enabled);
+    aspect.setShowUnmatchedTab(TriState::Disabled);
+    Utils::Store map;
+    aspect.toMap(map);
+    // The pattern list stays where older versions look for it.
+    QCOMPARE(map.value("MultiFilterOutput.FilterSetAspect").toStringList(), QStringList{"id-1"});
+
+    FilterSetAspect restored(nullptr);
+    restored.fromMap(map);
+    QCOMPARE(restored.enabledPatternIds(), QStringList{"id-1"});
+    QCOMPARE(restored.focusOnRunStart(), TriState::Enabled);
+    QCOMPARE(restored.showUnmatchedTab(), TriState::Disabled);
+
+    // Saved before overrides existed.
+    FilterSetAspect old(nullptr);
+    old.fromMap({{"MultiFilterOutput.FilterSetAspect", QStringList{"id-1"}}});
+    QCOMPARE(old.focusOnRunStart(), TriState::Default);
+}
+
+void tst_FilterSetAspect::overrideChangesAreSignalled()
+{
+    FilterSetAspect aspect(nullptr);
+    QSignalSpy changed(&aspect, &Utils::BaseAspect::changed);
+    aspect.setFocusOnRunStart(TriState::Disabled);
+    aspect.setFocusOnRunStart(TriState::Disabled);
+    aspect.setShowUnmatchedTab(TriState::Enabled);
+    QCOMPARE(changed.size(), 2);
+}
+
+void tst_FilterSetAspect::runSnapshotCarriesPatternsAndOverrides()
+{
+    FilterSetAspect aspect(nullptr);
+    aspect.setEnabledPatternIds({"id-a", "id-b"});
+    aspect.setFocusOnRunStart(TriState::Disabled);
+    aspect.setShowUnmatchedTab(TriState::Enabled);
+
+    const RunFilterSettings settings = runFilterSettings(aspect.variantValue());
+    QCOMPARE(settings.patternIds, (QStringList{"id-a", "id-b"}));
+    QCOMPARE(settings.focusOnRunStart, TriState::Disabled);
+    QCOMPARE(settings.showUnmatchedTab, TriState::Enabled);
+}
+
+void tst_FilterSetAspect::runSnapshotReadsAPlainIdList()
+{
+    const RunFilterSettings settings = runFilterSettings(QStringList{"id-a"});
+    QCOMPARE(settings.patternIds, QStringList{"id-a"});
+    QCOMPARE(settings.focusOnRunStart, TriState::Default);
+    QVERIFY(runFilterSettings(QVariant()).patternIds.isEmpty());
+}
+
+void tst_FilterSetAspect::resolvedSettingFollowsGlobalUnlessOverridden()
+{
+    QVERIFY(resolvedSetting(TriState::Default, true));
+    QVERIFY(!resolvedSetting(TriState::Default, false));
+    QVERIFY(resolvedSetting(TriState::Enabled, false));
+    QVERIFY(!resolvedSetting(TriState::Disabled, true));
 }
 
 QTEST_GUILESS_MAIN(tst_FilterSetAspect)
