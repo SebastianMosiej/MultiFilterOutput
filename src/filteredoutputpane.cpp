@@ -11,6 +11,7 @@
 #include "patternlibrary.h"
 #include "tablabel.h"
 
+#include <coreplugin/coreconstants.h>
 #include <coreplugin/icore.h>
 #include <coreplugin/messagemanager.h>
 
@@ -97,6 +98,14 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     connect(this, &IOutputPane::zoomOutRequested, this, [this](int range) { zoomBy(-range); });
     connect(this, &IOutputPane::resetZoomRequested, this, [this] { onTabZoomChanged(0); });
 
+    connect(&outputPaneSettings(), &OutputPaneSettings::maxCharactersPerTabChanged, this, [this] {
+        const qsizetype limit = maxCharactersPerTab();
+        if (m_allTab)
+            m_allTab->setMaxCharacterCount(limit);
+        for (const PatternTab &entry : std::as_const(m_patternTabs))
+            entry.tab->setMaxCharacterCount(limit);
+    });
+
     // One limit for every tab, changed live from the Pattern Library settings page.
     connect(
         &outputPaneSettings(),
@@ -138,6 +147,7 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
         m_allTab->setFontZoom(m_fontZoom);
         m_allTab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
         applyWordWrap(m_allTab);
+        m_allTab->setMaxCharacterCount(maxCharactersPerTab());
         connect(m_allTab, &OutputTabWidget::fontZoomChanged, this, &FilteredOutputPane::onTabZoomChanged);
         m_tabWidget->addTab(m_allTab, Tr::tr("All"));
 
@@ -200,6 +210,18 @@ QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
     return IOutputPane::toolBarWidgets() << m_patternsButton << m_saveFilterButton
                                          << m_wrapButton << m_copyButton << m_saveButton
                                          << m_runLabel;
+}
+
+qsizetype FilteredOutputPane::maxCharactersPerTab() const
+{
+    if (const qsizetype own = outputPaneSettings().maxCharactersPerTab(); own > 0)
+        return own;
+    // Application Output's "Limit output to ... characters" (its AppOutputSettings aren't
+    // exported, so the persisted key -- which says "Lines" but holds characters -- and its
+    // default, Core::Constants::DEFAULT_MAX_CHAR_COUNT).
+    return Core::ICore::settings()
+        ->value("ProjectExplorer/Settings/MaxAppOutputLines", Core::Constants::DEFAULT_MAX_CHAR_COUNT)
+        .toLongLong();
 }
 
 void FilteredOutputPane::applyWordWrap(OutputTabWidget *tab)
@@ -349,6 +371,8 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     // persisted key.
     m_lineQueue->setDiscardExcessiveOutput(
         Core::ICore::settings()->value("ProjectExplorer/Settings/DiscardAppOutput", false).toBool());
+    // Likewise its output limit, when following it (pattern tabs get it as they're created).
+    m_allTab->setMaxCharacterCount(maxCharactersPerTab());
 
     if (!activeRunControl) {
         m_runPatternIds.clear();
@@ -519,6 +543,7 @@ void FilteredOutputPane::addPatternTab(Project *project, const Pattern &pattern,
     tab->setFontZoom(m_fontZoom);
     tab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
     applyWordWrap(tab);
+    tab->setMaxCharacterCount(maxCharactersPerTab());
     connect(tab, &OutputTabWidget::matchCountChanged, this, [this, pattern, tab](int count) {
         updateTabLabel(pattern, tab, count);
     });

@@ -158,10 +158,32 @@ public:
         connect(maxLineLengthSpin, &QSpinBox::valueChanged, this, [](int value) {
             outputPaneSettings().setMaxDisplayedLineLength(value);
         });
+        auto *maxCharactersSpin = new QSpinBox(this);
+        maxCharactersSpin->setRange(0, std::numeric_limits<int>::max());
+        maxCharactersSpin->setSingleStep(1'000'000);
+        maxCharactersSpin->setGroupSeparatorShown(true);
+        maxCharactersSpin->setSpecialValueText(Tr::tr("Same as Application Output"));
+        maxCharactersSpin->setSuffix(Tr::tr(" characters"));
+        maxCharactersSpin->setValue(int(outputPaneSettings().maxCharactersPerTab()));
+        maxCharactersSpin->setToolTip(
+            Tr::tr("How much output each MultiFilterOutput tab keeps; the oldest lines are "
+                   "dropped first. \"Same as Application Output\" follows its \"Limit output "
+                   "to ... characters\" setting (Preferences > Build & Run > Application "
+                   "Output)."));
+        maxCharactersSpin->setKeyboardTracking(false);
+        // Persists immediately; FilteredOutputPane applies it to its open tabs right away.
+        connect(maxCharactersSpin, &QSpinBox::valueChanged, this, [](int value) {
+            outputPaneSettings().setMaxCharactersPerTab(value);
+        });
+
         auto *maxLineLengthRow = new QHBoxLayout;
         maxLineLengthRow->addWidget(new QLabel(Tr::tr("Maximum displayed line length:"), this));
         maxLineLengthRow->addWidget(maxLineLengthSpin);
         maxLineLengthRow->addStretch();
+        auto *maxCharactersRow = new QHBoxLayout;
+        maxCharactersRow->addWidget(new QLabel(Tr::tr("Keep per tab at most:"), this));
+        maxCharactersRow->addWidget(maxCharactersSpin);
+        maxCharactersRow->addStretch();
 
         m_tree = new PatternTreeWidget(this);
         m_tree->setColumnCount(7);
@@ -269,6 +291,7 @@ public:
         layout->addWidget(focusOnRunStartCheck);
         layout->addWidget(unmatchedCheck);
         layout->addLayout(maxLineLengthRow);
+        layout->addLayout(maxCharactersRow);
         layout->addLayout(topRow);
         layout->addLayout(form);
 

@@ -235,9 +235,11 @@ Creator version — see **Requirements**.
    page: pick where the pane's status-bar button sits (**Output Pane
    Position**), whether clicking a line in a pattern tab should jump to
    **All** or just behave like a normal text click, whether the pane
-   should take focus away from **Application Output** when a run starts, and
-   whether to show the **Unmatched** tab, and the **Maximum displayed line
-   length** for all tabs.
+   should take focus away from **Application Output** when a run starts,
+   whether to show the **Unmatched** tab, the **Maximum displayed line
+   length** for all tabs, and how much output each tab keeps (**Keep per tab
+   at most** — by default the same as *Application Output*'s "Limit output
+   to ... characters"; the oldest lines go first).
 4. **Run your app.** A **MultiFilterOutput** button appears in the
    bottom-panel switcher next to **Application Output** (or at the end,
    per your position setting).

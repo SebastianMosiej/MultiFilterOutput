@@ -126,6 +126,27 @@ void OutputPaneSettings::setShowUnmatchedTab(bool enabled)
     emit showUnmatchedTabChanged(m_showUnmatchedTab);
 }
 
+qsizetype OutputPaneSettings::maxCharactersPerTab() const
+{
+    return m_maxCharactersPerTab;
+}
+
+void OutputPaneSettings::setMaxCharactersPerTab(qsizetype characters)
+{
+    characters = qMax<qsizetype>(0, characters);
+    if (m_maxCharactersPerTab == characters)
+        return;
+    m_maxCharactersPerTab = characters;
+
+    Utils::QtcSettings *settings = Core::ICore::settings();
+    settings->beginGroup(Constants::SETTINGS_GROUP);
+    settings->setValue(Constants::MAX_CHARACTERS_PER_TAB_KEY, characters);
+    settings->endGroup();
+    settings->sync();
+
+    emit maxCharactersPerTabChanged(m_maxCharactersPerTab);
+}
+
 void OutputPaneSettings::load()
 {
     Utils::QtcSettings *settings = Core::ICore::settings();
@@ -137,6 +158,8 @@ void OutputPaneSettings::load()
     // Clamped like setMaxDisplayedLineLength(): a hand-edited negative value means no limit.
     m_wordWrap = settings->value(Constants::WORD_WRAP_KEY, true).toBool();
     m_showUnmatchedTab = settings->value(Constants::SHOW_UNMATCHED_TAB_KEY, true).toBool();
+    m_maxCharactersPerTab = qMax<qsizetype>(
+        0, settings->value(Constants::MAX_CHARACTERS_PER_TAB_KEY, 0).toLongLong());
     m_maxDisplayedLineLength = qMax(
         0,
         settings->value(Constants::MAX_DISPLAYED_LINE_LENGTH_KEY, DefaultMaxDisplayedLineLength)

@@ -83,6 +83,8 @@ private:
     void copyCurrentTab();
     void saveCurrentTab();
     void applyWordWrap(OutputTabWidget *tab);
+    // Characters each tab keeps: the pane's own setting, or Application Output's.
+    qsizetype maxCharactersPerTab() const;
     // Turns the quick filter into a Pattern Library entry.
     void saveFilterAsPattern();
     // Steps the current tab to its next/previous match and keeps All at the same line.

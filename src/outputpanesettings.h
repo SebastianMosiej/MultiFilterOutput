@@ -54,6 +54,13 @@ public:
     bool showUnmatchedTab() const;
     void setShowUnmatchedTab(bool enabled);
 
+    // How much output each tab keeps, in characters -- the oldest lines go first (see
+    // OutputTabWidget::setMaxCharacterCount()). 0, the default, means the same as
+    // Application Output (its "Limit output to ... characters" setting). Applied to open
+    // tabs straight away.
+    qsizetype maxCharactersPerTab() const;
+    void setMaxCharactersPerTab(qsizetype characters);
+
     void load();
 
 signals:
@@ -61,6 +68,7 @@ signals:
     void maxDisplayedLineLengthChanged(int length);
     void wordWrapChanged(bool enabled);
     void showUnmatchedTabChanged(bool enabled);
+    void maxCharactersPerTabChanged(qsizetype characters);
 
 private:
     OutputPanePlacement m_placement = OutputPanePlacement::NextToApplicationOutput;
@@ -69,6 +77,7 @@ private:
     int m_maxDisplayedLineLength = DefaultMaxDisplayedLineLength;
     bool m_wordWrap = true;
     bool m_showUnmatchedTab = true;
+    qsizetype m_maxCharactersPerTab = 0;
 };
 
 MULTIFILTEROUTPUT_EXPORT OutputPaneSettings &outputPaneSettings();
