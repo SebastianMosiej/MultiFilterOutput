@@ -62,6 +62,7 @@ void tst_StarterPatterns::matchWhatTheyAreFor_data()
     QTest::newRow("warning") << "Warnings" << "main.cpp:3: warning: unused variable" << true;
     QTest::newRow("WARN") << "Warnings" << "12:00:01 WARN slow response" << true;
     QTest::newRow("warnings count") << "Warnings" << "0 errors, 2 warnings" << false;
+    QTest::newRow("QWARN") << "Warnings" << "QWARN  : tst_Foo::bar() deprecated call" << true;
 
     QTest::newRow("console.log") << "QML" << "qml: button clicked" << true;
     QTest::newRow("qml file")

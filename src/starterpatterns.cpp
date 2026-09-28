@@ -26,8 +26,9 @@ QList<Pattern> starterPatterns()
     // Whole words, so "0 errors" or "terror" stay out.
     Pattern errors = starter(
         "Errors", Tr::tr("Errors"), R"(\b(error|fatal|critical)\b)", QColor(0xe0, 0x40, 0x40));
+    // Including Qt Test's QWARN lines (qWarning() during a test).
     Pattern warnings = starter(
-        "Warnings", Tr::tr("Warnings"), R"(\b(warning|warn)\b)", QColor(0xe0, 0xa0, 0x20));
+        "Warnings", Tr::tr("Warnings"), R"(\b(warning|warn)\b|^QWARN\b)", QColor(0xe0, 0xa0, 0x20));
     // console.log() and friends ("qml: ..."), and messages pointing into a .qml file.
     Pattern qml = starter("Qml", Tr::tr("QML"), R"(^qml: |\.qml:\d+)", QColor(0xa0, 0x60, 0xe0));
     // Q_ASSERT ("ASSERT: ..."), Q_ASSERT_X ("ASSERT failure in ..."), and the C runtime's
