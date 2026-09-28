@@ -37,6 +37,12 @@ public:
     // Sweeping stops at the first line that doesn't match continuationPattern.
     bool groupContinuationLines = false;
     QString continuationPattern = QStringLiteral("^ {1,3}");
+    // Like grep -B/-A: this many lines before/after each match are shown in the tab too,
+    // without counting as matches. Only lines on the pattern's channels count, and a line is
+    // never shown twice (overlapping context just joins up). 0..MaxContextLines.
+    static constexpr int MaxContextLines = 100;
+    int contextBefore = 0;
+    int contextAfter = 0;
     // When set, FilterSetAspect enables this pattern by default for every newly created run
     // configuration (not for ones already saved -- see FilterSetAspect::FilterSetAspect()).
     bool isDefault = false;

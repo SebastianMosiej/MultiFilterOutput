@@ -13,6 +13,7 @@
 #include <QTimer>
 
 #include <limits>
+#include <optional>
 
 QT_BEGIN_NAMESPACE
 class QWheelEvent;
@@ -132,6 +133,8 @@ public:
         qint64 timestamp; // 0 if none was given
     };
     QList<Line> lines() const;
+    // The line with this id (see appendLine()), if the tab still holds it.
+    std::optional<Line> line(int lineId) const;
 
     enum class Direction { Forward, Backward };
     // Moves the cursor to the next/previous marked line after/before the current one,

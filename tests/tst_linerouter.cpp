@@ -31,7 +31,8 @@ namespace MultiFilterOutput {
 // For QCOMPARE on Routes.
 bool operator==(const LineRouter::Route &a, const LineRouter::Route &b)
 {
-    return a.patternIndex == b.patternIndex && a.countsAsMatch == b.countsAsMatch;
+    return a.patternIndex == b.patternIndex && a.countsAsMatch == b.countsAsMatch
+           && a.contextBefore == b.contextBefore;
 }
 } // namespace MultiFilterOutput
 
@@ -54,6 +55,14 @@ private slots:
     void otherChannelsDontTouchContinuationRuns();
     void lineOnNoPatternsChannelIsUnmatched();
     void excludedLineStartsNoContinuationRun();
+    void afterContextShowsTheNextLines();
+    void afterContextRestartsOnEachMatch();
+    void beforeContextHandsBackThePrecedingLines();
+    void contextNeverRepeatsLinesAlreadyShown();
+    void contextCountsOnlyThePatternsChannels();
+    void continuationLinesUseUpAfterContext();
+    void contextLinesDontTakeLinesFromUnmatched();
+    void resetContinuationsForgetsContext();
 };
 
 void tst_LineRouter::routesLinesToEveryMatchingPattern()
@@ -232,6 +241,102 @@ void tst_LineRouter::excludedLineStartsNoContinuationRun()
     QCOMPARE(excluded.routes, Routes{});
     QVERIFY(excluded.unmatched);
     QCOMPARE(router.route("  its trace", Utils::StdOutFormat).routes, Routes{});
+}
+
+static Pattern withContext(Pattern p, int before, int after)
+{
+    p.contextBefore = before;
+    p.contextAfter = after;
+    return p;
+}
+
+// Feeds lines tagged 1, 2, 3, ... and returns each one's routes.
+static QList<Routes> feed(LineRouter &router, const QStringList &lines, int firstTag = 1)
+{
+    QList<Routes> result;
+    int tag = firstTag;
+    for (const QString &line : lines)
+        result << router.route(line, Utils::StdOutFormat, tag++).routes;
+    return result;
+}
+
+void tst_LineRouter::afterContextShowsTheNextLines()
+{
+    LineRouter router({withContext(regexPattern("ERROR"), 0, 2)});
+    QCOMPARE(
+        feed(router, {"ERROR x", "a", "b", "c"}),
+        (QList<Routes>{{{0, true}}, {{0, false}}, {{0, false}}, {}}));
+}
+
+void tst_LineRouter::afterContextRestartsOnEachMatch()
+{
+    LineRouter router({withContext(regexPattern("ERROR"), 0, 1)});
+    QCOMPARE(
+        feed(router, {"ERROR 1", "ERROR 2", "a", "b"}),
+        (QList<Routes>{{{0, true}}, {{0, true}}, {{0, false}}, {}}));
+}
+
+void tst_LineRouter::beforeContextHandsBackThePrecedingLines()
+{
+    LineRouter router({withContext(regexPattern("ERROR"), 2, 0)});
+    const QList<Routes> routes = feed(router, {"a", "b", "c", "ERROR x", "d"});
+    QCOMPARE(routes.at(3), (Routes{{0, true, {2, 3}}}));
+    QCOMPARE(routes.at(4), Routes{});
+}
+
+// grep's joined-up context: what the tab already shows -- a match, after-context -- is never
+// handed back as before-context of the next match.
+void tst_LineRouter::contextNeverRepeatsLinesAlreadyShown()
+{
+    LineRouter router({withContext(regexPattern("ERROR"), 3, 1)});
+    const QList<Routes> routes = feed(router, {"ERROR 1", "after", "gap", "ERROR 2"});
+    QCOMPARE(routes.at(1), (Routes{{0, false}}));
+    QCOMPARE(routes.at(3), (Routes{{0, true, {3}}}));
+}
+
+void tst_LineRouter::contextCountsOnlyThePatternsChannels()
+{
+    Pattern errors = withContext(regexPattern("ERROR"), 1, 1);
+    errors.channels = Pattern::StdErrChannel;
+    LineRouter router({errors});
+
+    router.route("before, on stderr", Utils::StdErrFormat, 1);
+    router.route("stdout noise", Utils::StdOutFormat, 2);
+    QCOMPARE(router.route("ERROR", Utils::StdErrFormat, 3).routes, (Routes{{0, true, {1}}}));
+    QCOMPARE(router.route("stdout noise", Utils::StdOutFormat, 4).routes, Routes{});
+    QCOMPARE(router.route("after, on stderr", Utils::StdErrFormat, 5).routes, (Routes{{0, false}}));
+}
+
+// "N lines after the match", like grep: a continuation run (which carries on regardless)
+// counts toward them.
+void tst_LineRouter::continuationLinesUseUpAfterContext()
+{
+    LineRouter router({withContext(grouping(regexPattern("ERROR")), 0, 1)});
+    QCOMPARE(
+        feed(router, {"ERROR x", "  at foo()", "  at bar()", "next"}),
+        (QList<Routes>{{{0, true}}, {{0, false}}, {{0, false}}, {}}));
+}
+
+// Unmatched is for lines no pattern picked out; context around another pattern's match
+// wasn't picked out (and before-context can't be taken back from Unmatched anyway).
+void tst_LineRouter::contextLinesDontTakeLinesFromUnmatched()
+{
+    LineRouter router({withContext(regexPattern("ERROR"), 0, 1)});
+    router.route("ERROR x", Utils::StdOutFormat, 1);
+    const LineRouter::Result context = router.route("a", Utils::StdOutFormat, 2);
+    QCOMPARE(context.routes, (Routes{{0, false}}));
+    QVERIFY(context.unmatched);
+}
+
+void tst_LineRouter::resetContinuationsForgetsContext()
+{
+    LineRouter router({withContext(regexPattern("ERROR"), 1, 1)});
+    feed(router, {"a", "ERROR x"});
+    router.resetContinuations();
+    QCOMPARE(feed(router, {"b"}, 3), (QList<Routes>{{}}));
+    router.route("c", Utils::StdOutFormat, 4);
+    router.resetContinuations();
+    QCOMPARE(router.route("ERROR y", Utils::StdOutFormat, 5).routes, (Routes{{0, true}}));
 }
 
 QTEST_GUILESS_MAIN(tst_LineRouter)

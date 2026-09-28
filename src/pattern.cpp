@@ -43,6 +43,8 @@ QVariantMap Pattern::toMap() const
         {"color", color},
         {"groupContinuationLines", groupContinuationLines},
         {"continuationPattern", continuationPattern},
+        {"contextBefore", contextBefore},
+        {"contextAfter", contextAfter},
         {"isDefault", isDefault},
         {"channels", int(channels.toInt())},
     };
@@ -65,6 +67,8 @@ Pattern Pattern::fromMap(const QVariantMap &map)
     p.groupContinuationLines = map.value("groupContinuationLines", false).toBool();
     p.continuationPattern = map.value("continuationPattern", QStringLiteral("^ {1,3}")).toString();
     p.isDefault = map.value("isDefault", false).toBool();
+    p.contextBefore = qBound(0, map.value("contextBefore", 0).toInt(), MaxContextLines);
+    p.contextAfter = qBound(0, map.value("contextAfter", 0).toInt(), MaxContextLines);
     // Absent in settings from before channels existed; none at all (or only unknown bits)
     // would make a pattern that can never match. Either way: all channels.
     const Channels channels

@@ -369,18 +369,30 @@ void OutputTabWidget::markLastLineAsNotice()
         setBlockProperty(block, NoticeProperty, true);
 }
 
+static OutputTabWidget::Line lineFromBlock(const QTextBlock &block)
+{
+    const QTextBlockFormat format = block.blockFormat();
+    return {
+        block.text(),
+        Utils::OutputFormat(format.intProperty(OutputFormatProperty)),
+        block.userState(),
+        format.boolProperty(NoticeProperty),
+        format.property(TimestampProperty).toLongLong()};
+}
+
+std::optional<OutputTabWidget::Line> OutputTabWidget::line(int lineId) const
+{
+    const QTextBlock block = blockForLine(lineId);
+    if (!block.isValid())
+        return std::nullopt;
+    return lineFromBlock(block);
+}
+
 QList<OutputTabWidget::Line> OutputTabWidget::lines() const
 {
     QList<Line> result;
-    for (QTextBlock b = document()->firstBlock(); b != document()->lastBlock(); b = b.next()) {
-        const QTextBlockFormat format = b.blockFormat();
-        result.append(
-            {b.text(),
-             Utils::OutputFormat(format.intProperty(OutputFormatProperty)),
-             b.userState(),
-             format.boolProperty(NoticeProperty),
-             format.property(TimestampProperty).toLongLong()});
-    }
+    for (QTextBlock b = document()->firstBlock(); b != document()->lastBlock(); b = b.next())
+        result.append(lineFromBlock(b));
     return result;
 }
 

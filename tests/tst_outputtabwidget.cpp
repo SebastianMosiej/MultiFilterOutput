@@ -52,6 +52,7 @@ private slots:
     void timestampsAreStoredAndReported();
     void formatTimestampShowsLocalTime();
     void timestampGutterAppearsOnlyWhenShown();
+    void lineLooksUpOneLineById();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -635,6 +636,26 @@ void tst_OutputTabWidget::timestampGutterAppearsOnlyWhenShown()
 
     tab.setShowTimestamps(false);
     QCOMPARE(tab.viewport()->x(), textLeft);
+}
+
+void tst_OutputTabWidget::lineLooksUpOneLineById()
+{
+    OutputTabWidget tab;
+    const int first = tab.appendLine("first", Utils::StdOutFormat, -1, true, 111);
+    const int second = tab.appendLine("second", Utils::StdErrFormat, -1, true, 222);
+
+    const std::optional<OutputTabWidget::Line> found = tab.line(second);
+    QVERIFY(found);
+    QCOMPARE(found->text, QStringLiteral("second"));
+    QCOMPARE(found->format, Utils::StdErrFormat);
+    QCOMPARE(found->lineId, second);
+    QCOMPARE(found->timestamp, 222);
+    QCOMPARE(tab.line(first)->text, QStringLiteral("first"));
+    QVERIFY(!tab.line(second + 1));
+
+    // Dropped for room: gone.
+    tab.setMaxCharacterCount(8);
+    QVERIFY(!tab.line(first));
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

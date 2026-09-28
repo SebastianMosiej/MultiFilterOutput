@@ -19,6 +19,7 @@ private slots:
     void looksAtOnlyItsChannels();
     void excludeTextDefaultsEmptyAndRoundTrips();
     void wholeWordDefaultsOffAndRoundTrips();
+    void contextLinesDefaultToNoneRoundTripAndAreBounded();
 };
 
 void tst_Pattern::roundTripsThroughMap()
@@ -142,6 +143,24 @@ void tst_Pattern::wholeWordDefaultsOffAndRoundTrips()
     Pattern p;
     p.wholeWord = true;
     QVERIFY(Pattern::fromMap(p.toMap()).wholeWord);
+}
+
+void tst_Pattern::contextLinesDefaultToNoneRoundTripAndAreBounded()
+{
+    QCOMPARE(Pattern().contextBefore, 0);
+    QCOMPARE(Pattern::fromMap({{"id", "x"}}).contextAfter, 0);
+
+    Pattern p;
+    p.contextBefore = 2;
+    p.contextAfter = 5;
+    const Pattern back = Pattern::fromMap(p.toMap());
+    QCOMPARE(back.contextBefore, 2);
+    QCOMPARE(back.contextAfter, 5);
+
+    // Hand-edited settings.
+    const Pattern wild = Pattern::fromMap({{"contextBefore", -3}, {"contextAfter", 100000}});
+    QCOMPARE(wild.contextBefore, 0);
+    QCOMPARE(wild.contextAfter, Pattern::MaxContextLines);
 }
 
 #include "tst_pattern.moc"
