@@ -115,6 +115,14 @@ public:
     // A note the pane itself added (e.g. "... lines dropped"), not a line of the app's output.
     void markLastLineAsNotice();
 
+    // Keeps what the tab holds, greyed out, as the previous run's output -- what Application
+    // Output does on a new run unless "Clear old output on a new run" is set
+    // (Core::OutputWindow::grayOutOldContent()). Those lines are no longer match stops, and the
+    // match count starts again from 0: both are about the current run.
+    void grayOutOldContent();
+    // The same for the line just appended (the previous run's output replayed into a new tab).
+    void markLastLineAsOld();
+
     // The line just appended, as shown -- what match highlighting has to be computed on,
     // since that is what the spans must point into (truncated, escape codes gone).
     QString lastLineText() const;
@@ -131,6 +139,7 @@ public:
         int lineId;
         bool isNotice;
         qint64 timestamp; // 0 if none was given
+        bool isOld = false; // see grayOutOldContent()
     };
     QList<Line> lines() const;
     // The line with this id (see appendLine()), if the tab still holds it.

@@ -77,6 +77,8 @@ constexpr int OutputFormatProperty = QTextFormat::UserProperty + 2;
 constexpr int NoticeProperty = QTextFormat::UserProperty + 3;
 // When the line arrived, ms since the epoch (see appendLine()).
 constexpr int TimestampProperty = QTextFormat::UserProperty + 4;
+// The line is the previous run's output, kept greyed out (see grayOutOldContent()).
+constexpr int OldRunProperty = QTextFormat::UserProperty + 5;
 
 void setBlockProperty(const QTextBlock &block, int property, const QVariant &value)
 {
@@ -362,6 +364,48 @@ void OutputTabWidget::highlightLastLine(const QList<MatchSpan> &spans, const QCo
     }
 }
 
+// Halfway from the text color to the background, like Core::OutputWindow::grayOutOldContent().
+static QTextCharFormat oldContentFormat(const QPalette &palette)
+{
+    const QColor background = palette.base().color();
+    const QColor text = palette.text().color();
+    QTextCharFormat format;
+    format.setForeground(QColor(
+        (background.red() + text.red()) / 2,
+        (background.green() + text.green()) / 2,
+        (background.blue() + text.blue()) / 2));
+    return format;
+}
+
+static void markBlockAsOld(const QTextBlock &block, const QTextCharFormat &format)
+{
+    setBlockProperty(block, OldRunProperty, true);
+    QTextCursor cursor(block);
+    cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    // Merged: links keep being links, only the color changes.
+    cursor.mergeCharFormat(format);
+}
+
+void OutputTabWidget::grayOutOldContent()
+{
+    const QTextCharFormat format = oldContentFormat(palette());
+    for (QTextBlock b = document()->firstBlock(); b != document()->lastBlock(); b = b.next()) {
+        if (!b.blockFormat().boolProperty(OldRunProperty))
+            markBlockAsOld(b, format);
+    }
+    clearMatchStops();
+    m_matchCount = 0;
+    m_matchCountTimer.stop();
+    emit matchCountChanged(m_matchCount);
+}
+
+void OutputTabWidget::markLastLineAsOld()
+{
+    const QTextBlock block = document()->lastBlock().previous();
+    if (block.isValid())
+        markBlockAsOld(block, oldContentFormat(palette()));
+}
+
 void OutputTabWidget::markLastLineAsNotice()
 {
     const QTextBlock block = document()->lastBlock().previous();
@@ -377,7 +421,8 @@ static OutputTabWidget::Line lineFromBlock(const QTextBlock &block)
         Utils::OutputFormat(format.intProperty(OutputFormatProperty)),
         block.userState(),
         format.boolProperty(NoticeProperty),
-        format.property(TimestampProperty).toLongLong()};
+        format.property(TimestampProperty).toLongLong(),
+        format.boolProperty(OldRunProperty)};
 }
 
 std::optional<OutputTabWidget::Line> OutputTabWidget::line(int lineId) const

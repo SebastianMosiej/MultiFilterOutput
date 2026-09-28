@@ -53,6 +53,9 @@ private slots:
     void formatTimestampShowsLocalTime();
     void timestampGutterAppearsOnlyWhenShown();
     void lineLooksUpOneLineById();
+    void grayOutKeepsOldLinesAsOld();
+    void grayedOutLinesLookDimmer();
+    void markLastLineAsOldMarksOnlyThatLine();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -656,6 +659,62 @@ void tst_OutputTabWidget::lineLooksUpOneLineById()
     // Dropped for room: gone.
     tab.setMaxCharacterCount(8);
     QVERIFY(!tab.line(first));
+}
+
+void tst_OutputTabWidget::grayOutKeepsOldLinesAsOld()
+{
+    OutputTabWidget tab;
+    tab.appendLine("old match", Utils::StdOutFormat);
+    tab.markLastLineAsMatch();
+    tab.appendLine("old other", Utils::StdOutFormat, -1, false);
+    QCOMPARE(tab.matchCount(), 1);
+    QSignalSpy counts(&tab, &OutputTabWidget::matchCountChanged);
+
+    tab.grayOutOldContent();
+
+    QVERIFY(!tab.hasMatchStops());
+    QCOMPARE(tab.matchCount(), 0);
+    QVERIFY(!counts.isEmpty());
+    QCOMPARE(counts.last().first().toInt(), 0);
+    const int newId = tab.appendLine("new", Utils::StdOutFormat);
+    const QList<OutputTabWidget::Line> lines = tab.lines();
+    QCOMPARE(lines.size(), 3);
+    QVERIFY(lines.at(0).isOld);
+    QVERIFY(lines.at(1).isOld);
+    QVERIFY(!lines.at(2).isOld);
+    QCOMPARE(lines.at(2).lineId, newId);
+    QVERIFY(newId != lines.at(1).lineId); // ids go on, so All's old lines stay reachable
+    QCOMPARE(tab.matchCount(), 1);
+}
+
+static QColor foregroundOf(const OutputTabWidget &tab, int index)
+{
+    const QTextBlock block = tab.document()->findBlockByNumber(index);
+    return block.begin().fragment().charFormat().foreground().color();
+}
+
+void tst_OutputTabWidget::grayedOutLinesLookDimmer()
+{
+    OutputTabWidget tab;
+    tab.appendLine("old", Utils::StdOutFormat);
+    const QColor before = foregroundOf(tab, 0);
+    tab.grayOutOldContent();
+    tab.appendLine("new", Utils::StdOutFormat);
+
+    QVERIFY(foregroundOf(tab, 0) != before);
+    QCOMPARE(foregroundOf(tab, 1), before);
+}
+
+void tst_OutputTabWidget::markLastLineAsOldMarksOnlyThatLine()
+{
+    OutputTabWidget tab;
+    tab.appendLine("replayed", Utils::StdOutFormat, -1, false);
+    tab.markLastLineAsOld();
+    tab.appendLine("live", Utils::StdOutFormat);
+    const QList<OutputTabWidget::Line> lines = tab.lines();
+    QVERIFY(lines.at(0).isOld);
+    QVERIFY(!lines.at(1).isOld);
+    QVERIFY(foregroundOf(tab, 0) != foregroundOf(tab, 1));
 }
 
 QTEST_MAIN(tst_OutputTabWidget)
