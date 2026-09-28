@@ -12,6 +12,12 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   matches"), a tab color, and an order (drag-and-drop or **Move Up**/**Move
   Down**) that also determines each pattern's left-to-right tab position.
   Managed under **Tools > Options > MultiFilterOutput > Pattern Library**.
+- **Import/export** — **Export...** on the Pattern Library page saves every
+  pattern to a JSON file, **Import...** merges one back in by pattern id:
+  new patterns are added, identical ones skipped, and for changed ones you
+  choose *Replace*, *Keep Existing* or *Keep Both* (the imported copy is added
+  as "*name* (imported)"). Share filters with a team or move them between
+  machines.
 - **Pattern groups** — give patterns *Tags* in the Pattern Library; a run
   configuration's *Output Filters* then shows each group as one checkbox that
   switches all of its patterns on or off, and the pane's **Patterns** menu has

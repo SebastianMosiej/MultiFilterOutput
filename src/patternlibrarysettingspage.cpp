@@ -4,10 +4,12 @@
 #include "multifilteroutputtr.h"
 #include "outputpanesettings.h"
 #include "pattern.h"
+#include "patternexchange.h"
 #include "patternlibrary.h"
 
 #include <coreplugin/icore.h>
 
+#include <utils/fileutils.h>
 #include <utils/guiutils.h>
 #include <utils/utilsicons.h>
 
@@ -22,6 +24,7 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QRegularExpression>
@@ -247,6 +250,18 @@ public:
         buttonColumn->addWidget(m_moveUpButton);
         buttonColumn->addWidget(m_moveDownButton);
         buttonColumn->addStretch();
+        auto *importButton = new QPushButton(Tr::tr("Import..."), this);
+        importButton->setToolTip(
+            Tr::tr("Add patterns from a file exported by MultiFilterOutput. Patterns already in "
+                   "the library (same id) are skipped when identical; for changed ones you "
+                   "choose what happens. Takes effect when the settings are applied."));
+        auto *exportButton = new QPushButton(Tr::tr("Export..."), this);
+        exportButton->setToolTip(
+            Tr::tr("Save all patterns, as listed here, to a JSON file."));
+        connect(importButton, &QPushButton::clicked, this, &PatternLibraryWidget::importPatterns);
+        connect(exportButton, &QPushButton::clicked, this, &PatternLibraryWidget::exportPatternFile);
+        buttonColumn->addWidget(importButton);
+        buttonColumn->addWidget(exportButton);
 
         auto *topRow = new QHBoxLayout;
         topRow->addWidget(m_tree);
@@ -505,6 +520,93 @@ private:
         const int row = m_tree->indexOfTopLevelItem(m_tree->currentItem());
         m_moveUpButton->setEnabled(row > 0);
         m_moveDownButton->setEnabled(row >= 0 && row < m_tree->topLevelItemCount() - 1);
+    }
+
+    void exportPatternFile()
+    {
+        const Utils::FilePath path = Utils::FileUtils::getSaveFilePath(
+            Tr::tr("Export Patterns"),
+            Utils::FileUtils::homePath().pathAppended("multifilteroutput-patterns.json"),
+            Tr::tr("JSON files (*.json);;All files (*)"));
+        if (path.isEmpty())
+            return;
+        if (const auto written = path.writeFileContents(exportPatterns(m_workingPatterns));
+            !written) {
+            QMessageBox::warning(
+                this,
+                Tr::tr("Export Patterns"),
+                Tr::tr("Could not write \"%1\":\n%2").arg(path.toUserOutput(), written.error()));
+        }
+    }
+
+    // Merges into the working copy, like the other edits on this page: Cancel still undoes it.
+    void importPatterns()
+    {
+        const QString title = Tr::tr("Import Patterns");
+        const Utils::FilePath path = Utils::FileUtils::getOpenFilePath(
+            title, Utils::FileUtils::homePath(), Tr::tr("JSON files (*.json);;All files (*)"));
+        if (path.isEmpty())
+            return;
+        const auto contents = path.fileContents();
+        if (!contents) {
+            QMessageBox::warning(
+                this,
+                title,
+                Tr::tr("Could not read \"%1\":\n%2").arg(path.toUserOutput(), contents.error()));
+            return;
+        }
+        const ParsedPatterns parsed = parsePatterns(*contents);
+        if (!parsed.error.isEmpty()) {
+            QMessageBox::warning(this, title, parsed.error);
+            return;
+        }
+
+        const ImportPlan plan = planImport(m_workingPatterns, parsed.patterns);
+        ImportConflicts conflicts = ImportConflicts::KeepExisting;
+        if (!plan.conflicting.isEmpty()) {
+            QStringList names;
+            for (const Pattern &p : plan.conflicting)
+                names << p.name;
+            QMessageBox box(this);
+            box.setIcon(QMessageBox::Question);
+            box.setWindowTitle(title);
+            box.setText(Tr::tr("%n imported pattern(s) differ from the library's pattern of the "
+                               "same id: %1.",
+                               nullptr,
+                               int(plan.conflicting.size()))
+                            .arg(names.join(", ")));
+            box.setInformativeText(Tr::tr("What should happen to them?"));
+            QPushButton *replace = box.addButton(Tr::tr("Replace"), QMessageBox::AcceptRole);
+            QPushButton *keepBoth = box.addButton(Tr::tr("Keep Both"), QMessageBox::AcceptRole);
+            QPushButton *keepExisting
+                = box.addButton(Tr::tr("Keep Existing"), QMessageBox::AcceptRole);
+            box.addButton(QMessageBox::Cancel);
+            box.setDefaultButton(keepExisting);
+            box.exec();
+            if (box.clickedButton() == replace)
+                conflicts = ImportConflicts::Replace;
+            else if (box.clickedButton() == keepBoth)
+                conflicts = ImportConflicts::KeepBoth;
+            else if (box.clickedButton() != keepExisting)
+                return; // cancelled: nothing imported
+        }
+
+        m_workingPatterns = applyImport(m_workingPatterns, plan, conflicts);
+        refreshTree();
+        Utils::markSettingsDirty();
+
+        QString summary = Tr::tr("Added %1, left %2 unchanged.")
+                              .arg(plan.added.size() + (conflicts == ImportConflicts::KeepBoth
+                                                            ? plan.conflicting.size()
+                                                            : 0))
+                              .arg(plan.unchanged);
+        if (conflicts == ImportConflicts::Replace)
+            summary += ' ' + Tr::tr("Replaced %1.").arg(plan.conflicting.size());
+        else if (conflicts == ImportConflicts::KeepExisting && !plan.conflicting.isEmpty())
+            summary += ' ' + Tr::tr("Kept %1 existing.").arg(plan.conflicting.size());
+        if (!parsed.warnings.isEmpty())
+            summary += "\n\n" + parsed.warnings.join("\n");
+        QMessageBox::information(this, title, summary);
     }
 
     void addPattern()
