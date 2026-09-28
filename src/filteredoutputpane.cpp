@@ -26,6 +26,7 @@
 #include <utils/theme/theme.h>
 
 #include <QClipboard>
+#include <QComboBox>
 #include <QDateTime>
 #include <QGuiApplication>
 #include <QInputDialog>
@@ -78,6 +79,8 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::rebuildTabs);
     connect(tracker, &RunTracker::activeRunChanged, this, &FilteredOutputPane::watchRunLabel);
     connect(tracker, &RunTracker::activeRunLineReceived, this, &FilteredOutputPane::onLineReceived);
+    connect(tracker, &RunTracker::runsChanged, this, &FilteredOutputPane::rebuildRunSelector);
+    applyHistoryLimit();
     // Pattern edits apply to the running run straight away, not just from the next one.
     connect(
         &patternLibrary(),
@@ -110,6 +113,7 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     connect(this, &IOutputPane::resetZoomRequested, this, [this] { onTabZoomChanged(0); });
 
     connect(&outputPaneSettings(), &OutputPaneSettings::maxCharactersPerTabChanged, this, [this] {
+        applyHistoryLimit();
         const qsizetype limit = maxCharactersPerTab();
         if (m_allTab)
             m_allTab->setMaxCharacterCount(limit);
@@ -178,6 +182,23 @@ QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
     if (!m_runLabel) {
         self->m_runLabel = new QLabel;
         self->updateRunLabel();
+
+        self->m_runSelector = new QComboBox;
+        m_runSelector->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+        m_runSelector->setToolTip(
+            Tr::tr("Which run to filter: the newest one, the one selected in Application "
+                   "Output, or a specific running one (kept while other runs start)"));
+        connect(m_runSelector, &QComboBox::activated, self, [self](int index) {
+            if (index == 0) {
+                self->m_runTracker->setFollowMode(RunTracker::FollowMode::NewestRun);
+            } else if (index == 1) {
+                self->m_runTracker->setFollowMode(RunTracker::FollowMode::ApplicationOutput);
+            } else if (index < self->m_runSelectorRuns.size()) {
+                if (RunControl *run = self->m_runSelectorRuns.at(index))
+                    self->m_runTracker->pinRunControl(run);
+            }
+        });
+        self->rebuildRunSelector();
     }
     if (!m_wrapButton) {
         self->m_timestampsButton = new QToolButton;
@@ -230,8 +251,7 @@ QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
     // IOutputPane's own widgets: the filter box (see updateFilter()) and the zoom buttons.
     return IOutputPane::toolBarWidgets() << m_patternsButton << m_saveFilterButton
                                          << m_timestampsButton << m_wrapButton << m_copyButton
-                                         << m_saveButton
-                                         << m_runLabel;
+                                         << m_saveButton << m_runSelector << m_runLabel;
 }
 
 qsizetype FilteredOutputPane::maxCharactersPerTab() const
@@ -393,8 +413,9 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     navigateStateChanged();
 
     // Arm the run-start pop for this run's first line (see onLineReceived()); a run going
-    // away (activeRunControl == nullptr) has no "first line" left to pop on.
-    m_popOnNextLine = activeRunControl != nullptr;
+    // away (activeRunControl == nullptr) has no "first line" left to pop on, and switching to
+    // an already-running run was the user's doing, from this pane or Application Output.
+    m_popOnNextLine = activeRunControl != nullptr && !m_runTracker->lastActivationWasSwitch();
 
     // Follow Application Output's "Discard excessive output" (Preferences > Build & Run >
     // Application Output), picked up per run as Application Output itself applies it when a
@@ -422,6 +443,70 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
         m_runPatternIdsRun = activeRunControl;
     }
     createPatternTabs(project, runPatterns());
+
+    // What the run printed before becoming the active one (switched to, or before this pane
+    // was first shown), filtered like live output and stamped with when it arrived.
+    for (const RunTracker::HistoryLine &line : m_runTracker->history(activeRunControl))
+        m_lineQueue->enqueue(line.text, line.format, line.receivedAt);
+}
+
+void FilteredOutputPane::applyHistoryLimit()
+{
+    // As much as a tab would keep anyway -- but at most half of what the line queue holds, so
+    // replaying a run's history on a switch never overflows it (see LineQueue::enqueue()).
+    const qsizetype tabLimit = maxCharactersPerTab();
+    const qsizetype queueLimit = LineQueue::DefaultMaxQueuedCharacters / 2;
+    m_runTracker->setHistoryLimit(tabLimit > 0 ? qMin(tabLimit, queueLimit) : queueLimit);
+}
+
+void FilteredOutputPane::rebuildRunSelector()
+{
+    if (!m_runSelector)
+        return;
+
+    const auto itemText = [](RunControl *run) {
+        const qint64 pid = run->applicationProcessHandle().pid();
+        return pid > 0 ? Tr::tr("%1 (pid %2)").arg(run->displayName(), QString::number(pid))
+                       : run->displayName();
+    };
+
+    QSignalBlocker blocker(m_runSelector);
+    m_runSelector->clear();
+    m_runSelectorRuns.clear();
+    m_runSelector->addItem(Tr::tr("Newest run"));
+    m_runSelector->addItem(Tr::tr("Application Output's run"));
+    m_runSelectorRuns << nullptr << nullptr;
+
+    QList<RunControl *> runs = m_runTracker->liveRunControls();
+    RunControl *active = m_runTracker->activeRunControl();
+    const bool pinned = m_runTracker->followMode() == RunTracker::FollowMode::Pinned;
+    // A pinned run that has stopped is still what the pane shows: list it, so it can be seen
+    // as the current choice.
+    if (pinned && active && !runs.contains(active))
+        runs.prepend(active);
+    for (RunControl *run : std::as_const(runs)) {
+        m_runSelector->addItem(itemText(run));
+        m_runSelectorRuns << run;
+        // The pid arrives after the run starts.
+        connect(
+            run,
+            &RunControl::applicationProcessHandleChanged,
+            this,
+            &FilteredOutputPane::rebuildRunSelector,
+            Qt::UniqueConnection);
+    }
+
+    switch (m_runTracker->followMode()) {
+    case RunTracker::FollowMode::NewestRun:
+        m_runSelector->setCurrentIndex(0);
+        break;
+    case RunTracker::FollowMode::ApplicationOutput:
+        m_runSelector->setCurrentIndex(1);
+        break;
+    case RunTracker::FollowMode::Pinned:
+        m_runSelector->setCurrentIndex(qMax(0, int(m_runSelectorRuns.indexOf(active))));
+        break;
+    }
 }
 
 QStringList FilteredOutputPane::launchPatternIds(RunControl *runControl) const

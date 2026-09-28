@@ -11,6 +11,7 @@
 #include <QPointer>
 
 QT_BEGIN_NAMESPACE
+class QComboBox;
 class QLabel;
 class QMenu;
 class QPoint;
@@ -116,6 +117,10 @@ private:
     // Re-points m_pidConnection at the newly active run, then refreshes the toolbar label.
     void watchRunLabel(ProjectExplorer::RunControl *activeRunControl);
     void updateRunLabel();
+    // Refills the run selector from the tracker's live runs and follow mode.
+    void rebuildRunSelector();
+    // The tracker's per-run history follows this pane's output limit.
+    void applyHistoryLimit();
 
     struct PatternTab
     {
@@ -147,6 +152,11 @@ private:
     // Which of m_patternTabs each line goes to (same indexes); rebuilt with them per run.
     LineRouter m_router;
     QLabel *m_runLabel = nullptr;
+    // Which run this pane shows: follow the newest run, follow Application Output's current
+    // tab, or pin one live run (see RunTracker::FollowMode).
+    QComboBox *m_runSelector = nullptr;
+    // The run behind each of m_runSelector's entries (nullptr for the two follow modes).
+    QList<QPointer<ProjectExplorer::RunControl>> m_runSelectorRuns;
     QToolButton *m_wrapButton = nullptr;
     QToolButton *m_timestampsButton = nullptr;
     QToolButton *m_copyButton = nullptr;

@@ -128,6 +128,13 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   process exits (matching Application Output's own behavior), so you can
   still review what happened after the app has closed. They only reset
   when a different run becomes the active one.
+- **Choose which run to filter** — the run selector in the toolbar follows
+  the *Newest run* (the default), follows *Application Output's run* (the run
+  whose tab you select there), or pins one running run, which then stays
+  while others start (e.g. keep the server while restarting the client).
+  Switching to a run shows what it printed so far, since every running run's
+  recent output is kept (up to the tab output limit); a run's output is
+  dropped once it stops.
 - **Opt-in** — disabled by default on a fresh install; you choose to turn
   it on.
 
