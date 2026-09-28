@@ -79,7 +79,10 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
         &patternLibrary(),
         &PatternLibrary::patternsChanged,
         this,
-        &FilteredOutputPane::refreshPatternTabs);
+        [this] { refreshPatternTabs(); });
+    connect(&outputPaneSettings(), &OutputPaneSettings::showUnmatchedTabChanged, this, [this] {
+        refreshPatternTabs(/*force=*/true);
+    });
 
     // Word wrap and zoom from the toolbar (and the zoom shortcuts), for every tab.
     connect(&outputPaneSettings(), &OutputPaneSettings::wordWrapChanged, this, [this](bool enabled) {
@@ -487,22 +490,44 @@ void FilteredOutputPane::createPatternTabs(Project *project, const QList<Pattern
     // Fresh with the tabs: continuation state and slow-pattern breakers start over. Its
     // pattern indexes are m_patternTabs' indexes.
     m_router = LineRouter(patterns);
-    for (const Pattern &pattern : patterns) {
-        auto *tab = new OutputTabWidget(m_tabWidget);
-        tab->setLinkParser(project);
-        tab->setFontZoom(m_fontZoom);
-        tab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
-        applyWordWrap(tab);
-        connect(tab, &OutputTabWidget::matchCountChanged, this, [this, pattern, tab](int count) {
-            updateTabLabel(pattern, tab, count);
-        });
-        connect(tab, &OutputTabWidget::jumpRequested, this, &FilteredOutputPane::onJumpRequested);
-        connect(tab, &OutputTabWidget::fontZoomChanged, this, &FilteredOutputPane::onTabZoomChanged);
+    for (const Pattern &pattern : patterns)
+        addPatternTab(project, pattern, /*isUnmatched=*/false);
 
-        m_patternTabs.append({pattern, tab});
-        m_tabWidget->addTab(tab, tabLabel(pattern, 0));
-        updateTabLabel(pattern, tab, 0);
+    // The complement of the pattern tabs, for triage -- pointless without a pattern that
+    // actually picks lines out (inverted ones don't: see LineRouter::Result::unmatched).
+    const bool anyPicksLinesOut = std::any_of(patterns.cbegin(), patterns.cend(), [](const Pattern &p) {
+        return !p.invert;
+    });
+    if (outputPaneSettings().showUnmatchedTab() && anyPicksLinesOut) {
+        Pattern unmatched;
+        unmatched.id = QStringLiteral("MultiFilterOutput.Unmatched");
+        unmatched.name = Tr::tr("Unmatched");
+        addPatternTab(project, unmatched, /*isUnmatched=*/true);
     }
+}
+
+OutputTabWidget *FilteredOutputPane::unmatchedTab() const
+{
+    return !m_patternTabs.isEmpty() && m_patternTabs.last().isUnmatched ? m_patternTabs.last().tab
+                                                                          : nullptr;
+}
+
+void FilteredOutputPane::addPatternTab(Project *project, const Pattern &pattern, bool isUnmatched)
+{
+    auto *tab = new OutputTabWidget(m_tabWidget);
+    tab->setLinkParser(project);
+    tab->setFontZoom(m_fontZoom);
+    tab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
+    applyWordWrap(tab);
+    connect(tab, &OutputTabWidget::matchCountChanged, this, [this, pattern, tab](int count) {
+        updateTabLabel(pattern, tab, count);
+    });
+    connect(tab, &OutputTabWidget::jumpRequested, this, &FilteredOutputPane::onJumpRequested);
+    connect(tab, &OutputTabWidget::fontZoomChanged, this, &FilteredOutputPane::onTabZoomChanged);
+
+    m_patternTabs.append({pattern, tab, isUnmatched});
+    m_tabWidget->addTab(tab, tabLabel(pattern, 0));
+    updateTabLabel(pattern, tab, 0);
 }
 
 void FilteredOutputPane::styleTabBar()
@@ -616,12 +641,18 @@ bool FilteredOutputPane::routeToPatternTabs(
             matchedAnyPattern = true;
         }
     }
+    if (result.unmatched) {
+        if (OutputTabWidget *tab = unmatchedTab()) {
+            tab->appendLine(line, format, allLine);
+            tab->markLastLineAsMatch();
+        }
+    }
     for (const int index : result.newlyTooSlow)
         reportTooSlow(m_patternTabs.at(index));
     return matchedAnyPattern;
 }
 
-void FilteredOutputPane::refreshPatternTabs()
+void FilteredOutputPane::refreshPatternTabs(bool force)
 {
     RunControl *run = m_runTracker->activeRunControl();
     if (!m_tabWidget || !m_allTab || !run)
@@ -630,13 +661,14 @@ void FilteredOutputPane::refreshPatternTabs()
     // The library changes for many reasons (a pattern this run doesn't use was edited or
     // added, say); only redo the tabs if this run's own patterns are any different.
     const QList<Pattern> patterns = runPatterns();
-    const bool unchanged = patterns.size() == m_patternTabs.size()
+    const qsizetype patternTabCount = m_patternTabs.size() - (unmatchedTab() ? 1 : 0);
+    const bool unchanged = patterns.size() == patternTabCount
                            && std::equal(
                                patterns.cbegin(), patterns.cend(), m_patternTabs.cbegin(),
                                [](const Pattern &p, const PatternTab &t) {
                                    return p.toMap() == t.pattern.toMap();
                                });
-    if (unchanged)
+    if (unchanged && !force)
         return;
 
     // Stay on the same tab if its pattern is still there.

@@ -13,6 +13,7 @@ const char JUMP_TO_ALL_ON_CLICK_KEY[] = "JumpToAllOnClick";
 const char FOCUS_PANE_ON_RUN_START_KEY[] = "FocusPaneOnRunStart";
 const char MAX_DISPLAYED_LINE_LENGTH_KEY[] = "MaxDisplayedLineLength";
 const char WORD_WRAP_KEY[] = "WordWrap";
+const char SHOW_UNMATCHED_TAB_KEY[] = "ShowUnmatchedTab";
 // The pane's action context, so the zoom shortcuts (Ctrl++ / Ctrl+- / Ctrl+0) reach it.
 const char PANE_CONTEXT[] = "MultiFilterOutput.PaneContext";
 

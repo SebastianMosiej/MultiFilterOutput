@@ -128,6 +128,17 @@ public:
             outputPaneSettings().setFocusPaneOnRunStart(checked);
         });
 
+        auto *unmatchedCheck = new QCheckBox(
+            Tr::tr("Show an \"Unmatched\" tab with the lines no pattern took"), this);
+        unmatchedCheck->setToolTip(
+            Tr::tr("Only when a run has at least one pattern that isn't inverted -- otherwise "
+                   "it would just repeat All. Inverted patterns don't count as taking a line."));
+        unmatchedCheck->setChecked(outputPaneSettings().showUnmatchedTab());
+        // Persists immediately, and the pane adds or removes the tab right away.
+        connect(unmatchedCheck, &QCheckBox::toggled, this, [](bool checked) {
+            outputPaneSettings().setShowUnmatchedTab(checked);
+        });
+
         auto *maxLineLengthSpin = new QSpinBox(this);
         maxLineLengthSpin->setRange(0, 10'000'000);
         maxLineLengthSpin->setSingleStep(1000);
@@ -256,6 +267,7 @@ public:
         layout->addWidget(placementGroup);
         layout->addWidget(jumpToAllCheck);
         layout->addWidget(focusOnRunStartCheck);
+        layout->addWidget(unmatchedCheck);
         layout->addLayout(maxLineLengthRow);
         layout->addLayout(topRow);
         layout->addLayout(form);

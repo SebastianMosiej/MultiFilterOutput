@@ -48,12 +48,19 @@ public:
     bool wordWrap() const;
     void setWordWrap(bool enabled);
 
+    // Whether the pane adds an "Unmatched" tab -- the lines no (non-inverted) pattern of the
+    // run took -- whenever the run has at least one non-inverted pattern. On by default;
+    // applied to the open pane straight away (see showUnmatchedTabChanged()).
+    bool showUnmatchedTab() const;
+    void setShowUnmatchedTab(bool enabled);
+
     void load();
 
 signals:
     void placementChanged(OutputPanePlacement placement);
     void maxDisplayedLineLengthChanged(int length);
     void wordWrapChanged(bool enabled);
+    void showUnmatchedTabChanged(bool enabled);
 
 private:
     OutputPanePlacement m_placement = OutputPanePlacement::NextToApplicationOutput;
@@ -61,6 +68,7 @@ private:
     bool m_focusPaneOnRunStart = false;
     int m_maxDisplayedLineLength = DefaultMaxDisplayedLineLength;
     bool m_wordWrap = true;
+    bool m_showUnmatchedTab = true;
 };
 
 MULTIFILTEROUTPUT_EXPORT OutputPaneSettings &outputPaneSettings();

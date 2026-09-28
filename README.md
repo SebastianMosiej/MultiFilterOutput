@@ -56,6 +56,12 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   settings page. (If *Application Output*'s own "Open Application Output when
   running" preference is set to **Always** rather than the default **On First
   Output Only**, it can still reclaim focus on later output lines.)
+- **Unmatched tab** — alongside **All** and the pattern tabs, an
+  **Unmatched** tab collects the lines none of the run's patterns took (as a
+  match or a grouped continuation line) — whatever your patterns don't yet
+  explain. Inverted patterns don't count as taking a line, and the tab only
+  appears when a run has at least one pattern that isn't inverted. Can be
+  turned off on the Pattern Library settings page.
 - **Pick patterns from the pane** — right-click the tabs, or use the
   **Patterns** toolbar button, to switch any pattern on or off for the
   current run: its tab appears (filled from what **All** holds) or goes
@@ -230,7 +236,8 @@ Creator version — see **Requirements**.
    Position**), whether clicking a line in a pattern tab should jump to
    **All** or just behave like a normal text click, whether the pane
    should take focus away from **Application Output** when a run starts, and
-   the **Maximum displayed line length** for all tabs.
+   whether to show the **Unmatched** tab, and the **Maximum displayed line
+   length** for all tabs.
 4. **Run your app.** A **MultiFilterOutput** button appears in the
    bottom-panel switcher next to **Application Output** (or at the end,
    per your position setting).

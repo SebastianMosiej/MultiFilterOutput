@@ -75,7 +75,7 @@ private:
     bool routeToPatternTabs(const QString &line, Utils::OutputFormat format, int allLine);
     // Rebuilds the pattern tabs when this run's patterns changed -- edited in the library,
     // or toggled from the pane -- and replays All through them.
-    void refreshPatternTabs();
+    void refreshPatternTabs(bool force = false);
     OutputTabWidget *currentTab() const;
     // Toolbar: pane-wide zoom by `points` (zoom buttons and shortcuts), copy and save the
     // current tab, and the word-wrap setting applied to a tab.
@@ -108,7 +108,15 @@ private:
     {
         Pattern pattern;
         OutputTabWidget *tab;
+        // The Unmatched tab (see createPatternTabs()): always the last entry, after every
+        // pattern's -- so m_router's pattern indexes are still m_patternTabs' indexes -- and
+        // with a stand-in pattern for its label.
+        bool isUnmatched = false;
     };
+
+    // Adds one pattern tab (or the Unmatched tab) to the tab widget and m_patternTabs.
+    void addPatternTab(ProjectExplorer::Project *project, const Pattern &pattern, bool isUnmatched);
+    OutputTabWidget *unmatchedTab() const;
 
     // Called once, when entry's pattern trips its slow-match breaker in m_router: relabels
     // the tab and says why in General Messages.
