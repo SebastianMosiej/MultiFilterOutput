@@ -49,6 +49,9 @@ private slots:
     void noCharacterLimitByDefault();
     void lastLineTextIsTheLineAsShown();
     void highlightLastLineTintsExactlyTheSpans();
+    void timestampsAreStoredAndReported();
+    void formatTimestampShowsLocalTime();
+    void timestampGutterAppearsOnlyWhenShown();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -596,6 +599,42 @@ void tst_OutputTabWidget::highlightLastLineTintsExactlyTheSpans()
     QCOMPARE(backgroundAt(tab, 25), tint); // the out-of-range span was clipped, not dropped
     // Only formatting changed, never the text.
     QCOMPARE(tab.lastLineText(), QStringLiteral("an ERROR and another ERROR"));
+}
+
+void tst_OutputTabWidget::timestampsAreStoredAndReported()
+{
+    OutputTabWidget tab;
+    tab.appendLine("stamped", Utils::StdOutFormat, -1, true, 1234567890123);
+    tab.appendLine("unstamped", Utils::StdOutFormat);
+
+    const QList<OutputTabWidget::Line> lines = tab.lines();
+    QCOMPARE(lines.at(0).timestamp, 1234567890123);
+    QCOMPARE(lines.at(1).timestamp, 0);
+}
+
+void tst_OutputTabWidget::formatTimestampShowsLocalTime()
+{
+    const QDateTime at(QDate(2026, 9, 28), QTime(13, 4, 5, 67));
+    QCOMPARE(formatTimestamp(at.toMSecsSinceEpoch()), QStringLiteral("13:04:05.067"));
+}
+
+// The gutter is room beside the text, not text: switching it on changes the margin, never
+// what Find, Copy or the filters see.
+void tst_OutputTabWidget::timestampGutterAppearsOnlyWhenShown()
+{
+    OutputTabWidget tab;
+    tab.appendLine("text", Utils::StdOutFormat, -1, true, 1234567890123);
+    QVERIFY(!tab.showTimestamps());
+    // The text area (viewport) moves right to make room for the gutter.
+    const int textLeft = tab.viewport()->x();
+
+    tab.setShowTimestamps(true);
+    QVERIFY(tab.showTimestamps());
+    QVERIFY(tab.viewport()->x() > textLeft);
+    QCOMPARE(tab.lastLineText(), QStringLiteral("text"));
+
+    tab.setShowTimestamps(false);
+    QCOMPARE(tab.viewport()->x(), textLeft);
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

@@ -14,7 +14,9 @@
 #include <utils/link.h>
 
 #include <QAbstractScrollArea>
+#include <QDateTime>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QScrollBar>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -68,12 +70,13 @@ QString displayText(const QString &line, int maxLength)
         .arg(kept, QString::number(line.size() - cut)); // not chained: see tabLabel()
 }
 
-
 // Block format property marking a line as a match stop (see markLastLineAsMatch()).
 constexpr int MatchStopProperty = QTextFormat::UserProperty + 1;
 // The line's Utils::OutputFormat, and whether it is the pane's own notice (see lines()).
 constexpr int OutputFormatProperty = QTextFormat::UserProperty + 2;
 constexpr int NoticeProperty = QTextFormat::UserProperty + 3;
+// When the line arrived, ms since the epoch (see appendLine()).
+constexpr int TimestampProperty = QTextFormat::UserProperty + 4;
 
 void setBlockProperty(const QTextBlock &block, int property, const QVariant &value)
 {
@@ -101,6 +104,23 @@ qint64 lineIdAge(int newest, int target, int modulus)
     return age < 0 ? age + modulus : age;
 }
 
+// The strip left of the text that the timestamps are painted in (like Qt's line-number-area
+// example): a plain child widget in the tab's left viewport margin, painted by the tab.
+class TimestampGutter final : public QWidget
+{
+public:
+    explicit TimestampGutter(OutputTabWidget *tab)
+        : QWidget(tab)
+        , m_tab(tab)
+    {}
+
+protected:
+    void paintEvent(QPaintEvent *event) override { m_tab->paintTimestampGutter(event); }
+
+private:
+    OutputTabWidget *m_tab;
+};
+
 OutputTabWidget::OutputTabWidget(QWidget *parent)
     : QPlainTextEdit(parent)
 {
@@ -109,6 +129,17 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
     // every appended line a second time. (A non-zero maximumBlockCount used to disable it as a
     // side effect; the limit is in characters now, see setMaxCharacterCount().)
     setUndoRedoEnabled(false);
+
+    m_timestampGutter = new TimestampGutter(this);
+    m_timestampGutter->hide();
+    connect(this, &QPlainTextEdit::updateRequest, this, [this](const QRect &rect, int dy) {
+        if (!m_showTimestamps)
+            return;
+        if (dy != 0)
+            m_timestampGutter->scroll(0, dy);
+        else
+            m_timestampGutter->update(0, rect.y(), m_timestampGutter->width(), rect.height());
+    });
 
     // Ctrl+F: Qt Creator's Find toolbar searches the IFindSupport aggregated with the focused
     // widget (or a parent), and every output pane shares a Find toolbar placeholder -- so
@@ -164,7 +195,11 @@ void OutputTabWidget::setLinkParser(ProjectExplorer::Project *project)
 }
 
 int OutputTabWidget::appendLine(
-    const QString &line, Utils::OutputFormat format, int sourceLineId, bool countsAsMatch)
+    const QString &line,
+    Utils::OutputFormat format,
+    int sourceLineId,
+    bool countsAsMatch,
+    qint64 timestamp)
 {
     int lineId = sourceLineId;
     if (lineId < 0) {
@@ -182,6 +217,8 @@ int OutputTabWidget::appendLine(
     QTextBlock block = document()->lastBlock().previous();
     block.setUserState(lineId);
     setBlockProperty(block, OutputFormatProperty, int(format));
+    if (timestamp > 0)
+        setBlockProperty(block, TimestampProperty, timestamp);
     if (!m_filter.text.isEmpty())
         filterAppendedLine(block);
 
@@ -341,7 +378,8 @@ QList<OutputTabWidget::Line> OutputTabWidget::lines() const
             {b.text(),
              Utils::OutputFormat(format.intProperty(OutputFormatProperty)),
              b.userState(),
-             format.boolProperty(NoticeProperty)});
+             format.boolProperty(NoticeProperty),
+             format.property(TimestampProperty).toLongLong()});
     }
     return result;
 }
@@ -468,6 +506,81 @@ Utils::Result<> OutputTabWidget::saveContents(const Utils::FilePath &path) const
     if (!written)
         return Utils::ResultError(written.error());
     return Utils::ResultOk;
+}
+
+QString formatTimestamp(qint64 msecsSinceEpoch)
+{
+    return QDateTime::fromMSecsSinceEpoch(msecsSinceEpoch).toString("hh:mm:ss.zzz");
+}
+
+void OutputTabWidget::setShowTimestamps(bool show)
+{
+    if (show == m_showTimestamps)
+        return;
+    m_showTimestamps = show;
+    layoutTimestampGutter();
+}
+
+bool OutputTabWidget::showTimestamps() const
+{
+    return m_showTimestamps;
+}
+
+int OutputTabWidget::timestampGutterWidth() const
+{
+    return m_showTimestamps ? fontMetrics().horizontalAdvance(QStringLiteral("00:00:00.000")) + 8
+                            : 0;
+}
+
+void OutputTabWidget::layoutTimestampGutter()
+{
+    const int width = timestampGutterWidth();
+    setViewportMargins(width, 0, 0, 0);
+    const QRect area = contentsRect();
+    m_timestampGutter->setGeometry(area.left(), area.top(), width, area.height());
+    m_timestampGutter->setVisible(m_showTimestamps);
+    m_timestampGutter->update();
+}
+
+void OutputTabWidget::resizeEvent(QResizeEvent *event)
+{
+    QPlainTextEdit::resizeEvent(event);
+    layoutTimestampGutter();
+}
+
+void OutputTabWidget::changeEvent(QEvent *event)
+{
+    QPlainTextEdit::changeEvent(event);
+    // Zoom and the Preferences font change the width "00:00:00.000" needs.
+    if (event->type() == QEvent::FontChange)
+        layoutTimestampGutter();
+}
+
+void OutputTabWidget::paintTimestampGutter(QPaintEvent *event)
+{
+    QPainter painter(m_timestampGutter);
+    painter.fillRect(event->rect(), palette().color(QPalette::AlternateBase));
+    painter.setPen(palette().color(QPalette::PlaceholderText));
+    painter.setFont(font());
+
+    const int right = m_timestampGutter->width() - 4;
+    QTextBlock block = firstVisibleBlock();
+    qreal top = blockBoundingGeometry(block).translated(contentOffset()).top();
+    while (block.isValid() && top <= event->rect().bottom()) {
+        const qreal height = blockBoundingRect(block).height();
+        // Hidden by the quick filter: takes no room and gets no timestamp.
+        if (block.isVisible() && top + height >= event->rect().top()) {
+            const qint64 timestamp = block.blockFormat().property(TimestampProperty).toLongLong();
+            if (timestamp > 0) {
+                painter.drawText(
+                    QRectF(0, top, right, fontMetrics().height()),
+                    Qt::AlignRight | Qt::AlignVCenter,
+                    formatTimestamp(timestamp));
+            }
+        }
+        top += height;
+        block = block.next();
+    }
 }
 
 void OutputTabWidget::setMaxCharacterCount(qsizetype maxCharacters)

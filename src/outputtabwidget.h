@@ -51,6 +51,12 @@ struct MULTIFILTEROUTPUT_EXPORT LineFilter
     bool operator==(const LineFilter &) const = default;
 };
 
+class TimestampGutter;
+
+// A line's receive time (ms since the epoch) as the timestamp gutter shows it: local time,
+// hh:mm:ss.zzz.
+MULTIFILTEROUTPUT_EXPORT QString formatTimestamp(qint64 msecsSinceEpoch);
+
 // A single output tab: owns a Utils::OutputFormatter that appends formatted, optionally
 // linkified lines to itself. Used by FilteredOutputPane both for the "All" tab and for each
 // enabled pattern's tab. A click that doesn't land on a linkified reference emits
@@ -78,9 +84,11 @@ public:
     // mapped back to the right line of "All". countsAsMatch is false for a continuation line
     // swept in alongside a real match (see FilteredOutputPane::onLineReceived) -- it's still
     // shown, just not counted.
+    // `timestamp` is when the line arrived (ms since the epoch; 0 = unknown), shown in the
+    // timestamp gutter (see setShowTimestamps()).
     int appendLine(
         const QString &line, Utils::OutputFormat format, int sourceLineId = -1,
-        bool countsAsMatch = true);
+        bool countsAsMatch = true, qint64 timestamp = 0);
 
     int matchCount() const;
 
@@ -121,6 +129,7 @@ public:
         Utils::OutputFormat format;
         int lineId;
         bool isNotice;
+        qint64 timestamp; // 0 if none was given
     };
     QList<Line> lines() const;
 
@@ -153,6 +162,12 @@ public:
     // longer. 0 (the default) means no limit.
     void setMaxCharacterCount(qsizetype maxCharacters);
 
+    // Shows each line's timestamp in a gutter left of the text -- drawn there, not part of the
+    // text, so Find, Copy, Save, the quick filter and pattern matching see the same text
+    // either way, and toggling is instant.
+    void setShowTimestamps(bool show);
+    bool showTimestamps() const;
+
     // Writes the tab's text, as shown, to `path` as UTF-8 -- "Save tab to file" in the pane's
     // toolbar.
     Utils::Result<> saveContents(const Utils::FilePath &path) const;
@@ -176,6 +191,9 @@ signals:
     void fontZoomChanged(qreal zoom);
 
 protected:
+    void resizeEvent(QResizeEvent *event) override;
+    void changeEvent(QEvent *event) override;
+
     // The block holding the line with this id, or an invalid block if the tab no longer
     // holds it.
     QTextBlock blockForLine(int lineId) const;
@@ -199,6 +217,14 @@ private:
     // then just finds nothing.
     int m_matchStops = 0;
     int m_maxLineLength = 0;
+    // See setShowTimestamps(). The gutter sits in the left viewport margin and is painted by
+    // paintTimestampGutter().
+    friend class TimestampGutter;
+    TimestampGutter *m_timestampGutter = nullptr;
+    bool m_showTimestamps = false;
+    int timestampGutterWidth() const;
+    void layoutTimestampGutter();
+    void paintTimestampGutter(QPaintEvent *event);
     qsizetype m_maxCharacters = 0;
     LineFilter m_filter;
     // After-context lines still to reveal after the last matching line appended.
