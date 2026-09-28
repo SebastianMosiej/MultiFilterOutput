@@ -38,6 +38,10 @@ private slots:
     void followsApplicationOutputsSelectedTab();
     void newestModeIgnoresApplicationOutputsSelectedTab();
     void unpinningCatchesUpWithTheNewMode();
+    void finishedRunKeepsItsOutputAndCanBeSwitchedTo();
+    void onlyTheLatestFinishedRunsAreKept();
+    void rerunOfFinishedRunStartsAfresh();
+    void destroyedFinishedRunIsForgotten();
 
 private:
     static std::unique_ptr<RunControl> makeRun()
@@ -376,6 +380,87 @@ void tst_RunTracker::unpinningCatchesUpWithTheNewMode()
     older->setOutputVisible(true);
     tracker.setFollowMode(RunTracker::FollowMode::ApplicationOutput);
     QCOMPARE(tracker.activeRunControl(), older.get());
+}
+
+void tst_RunTracker::finishedRunKeepsItsOutputAndCanBeSwitchedTo()
+{
+    RunTracker tracker;
+    tracker.setFinishedRunsKept(3);
+    auto older = makeRun();
+    tracker.trackRunControl(older.get());
+    older->postMessage("done\nno newline", Utils::StdOutFormat);
+    tracker.untrackRunControl(older.get());
+    auto newer = makeRun();
+    tracker.trackRunControl(newer.get());
+
+    QCOMPARE(tracker.liveRunControls(), QList<RunControl *>{newer.get()});
+    QCOMPARE(tracker.finishedRunControls(), QList<RunControl *>{older.get()});
+    // Including the unterminated last line flushed on stop.
+    QCOMPARE(historyTexts(tracker, older.get()), (QStringList{"done", "no newline"}));
+
+    tracker.pinRunControl(older.get());
+    QCOMPARE(tracker.activeRunControl(), older.get());
+    QVERIFY(tracker.lastActivationWasSwitch());
+}
+
+void tst_RunTracker::onlyTheLatestFinishedRunsAreKept()
+{
+    RunTracker tracker;
+    tracker.setFinishedRunsKept(2);
+    auto first = makeRun();
+    auto second = makeRun();
+    auto third = makeRun();
+    for (RunControl *run : {first.get(), second.get(), third.get()}) {
+        tracker.trackRunControl(run);
+        run->postMessage("line\n", Utils::StdOutFormat);
+        tracker.untrackRunControl(run);
+    }
+
+    QCOMPARE(tracker.finishedRunControls(), (QList<RunControl *>{second.get(), third.get()}));
+    QVERIFY(tracker.history(first.get()).isEmpty());
+    tracker.pinRunControl(first.get()); // forgotten: nothing to switch to
+    QCOMPARE(tracker.activeRunControl(), third.get());
+
+    tracker.setFinishedRunsKept(1);
+    QCOMPARE(tracker.finishedRunControls(), QList<RunControl *>{third.get()});
+    QVERIFY(tracker.history(second.get()).isEmpty());
+}
+
+void tst_RunTracker::rerunOfFinishedRunStartsAfresh()
+{
+    RunTracker tracker;
+    tracker.setFinishedRunsKept(3);
+    auto run = makeRun();
+    tracker.trackRunControl(run.get());
+    run->postMessage("first time\n", Utils::StdOutFormat);
+    tracker.untrackRunControl(run.get());
+
+    tracker.trackRunControl(run.get());
+
+    QVERIFY(tracker.finishedRunControls().isEmpty());
+    QCOMPARE(tracker.liveRunControls(), QList<RunControl *>{run.get()});
+    QVERIFY(tracker.history(run.get()).isEmpty());
+    QSignalSpy lines(&tracker, &RunTracker::activeRunLineReceived);
+    run->postMessage("second time\n", Utils::StdOutFormat);
+    QCOMPARE(lines.size(), 1); // connected once, not twice
+}
+
+void tst_RunTracker::destroyedFinishedRunIsForgotten()
+{
+    RunTracker tracker;
+    tracker.setFinishedRunsKept(3);
+    auto older = makeRun();
+    auto newer = makeRun();
+    tracker.trackRunControl(older.get());
+    tracker.untrackRunControl(older.get());
+    tracker.trackRunControl(newer.get());
+    QSignalSpy changed(&tracker, &RunTracker::runsChanged);
+
+    older.reset();
+
+    QVERIFY(tracker.finishedRunControls().isEmpty());
+    QCOMPARE(tracker.activeRunControl(), newer.get());
+    QCOMPARE(changed.size(), 1);
 }
 
 QTEST_MAIN(tst_RunTracker)

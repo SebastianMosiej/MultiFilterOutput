@@ -90,6 +90,32 @@ void RunTracker::setHistoryLimit(qsizetype characters)
     m_historyLimit = qMax<qsizetype>(0, characters);
 }
 
+QList<RunControl *> RunTracker::finishedRunControls() const
+{
+    return m_finishedOrder;
+}
+
+void RunTracker::setFinishedRunsKept(int count)
+{
+    count = qMax(0, count);
+    if (count == m_finishedRunsKept)
+        return;
+    m_finishedRunsKept = count;
+    trimFinishedRuns();
+    emit runsChanged();
+}
+
+void RunTracker::trimFinishedRuns()
+{
+    while (m_finishedOrder.size() > m_finishedRunsKept) {
+        RunControl *runControl = m_finishedOrder.takeFirst();
+        m_runs.remove(runControl);
+        // The run on screen still needs its destroyed connection (see untrackRunControl()).
+        if (runControl != m_active)
+            disconnect(runControl, nullptr, this, nullptr);
+    }
+}
+
 bool RunTracker::lastActivationWasSwitch() const
 {
     return m_lastActivationWasSwitch;
@@ -105,8 +131,14 @@ void RunTracker::addToHistory(LiveRun &run, const OutputLineSplitter::Line &line
 
 void RunTracker::trackRunControl(RunControl *runControl)
 {
-    if (!runControl || m_runs.contains(runControl))
+    if (!runControl)
         return;
+    if (const auto it = m_runs.constFind(runControl); it != m_runs.constEnd()) {
+        if (it->running)
+            return;
+        // A Re-run of a finished run whose output was kept: a new run, with fresh history.
+        forgetRunControl(runControl);
+    }
 
     // A Re-run tracks the same RunControl again; untrackRunControl() left its destroyed
     // connection in place if it was the active run, so drop that rather than stack another.
@@ -152,11 +184,17 @@ void RunTracker::untrackRunControl(RunControl *runControl)
     if (!runControl)
         return;
 
+    const auto it = m_runs.find(runControl);
+    if (it != m_runs.end() && !it->running)
+        return; // already stopped
+
     // The run's last line need not end in a newline (a crash message, a final printf with
-    // no "\n"), in which case it is still sitting in the buffer; emit it now rather than
-    // drop it along with the buffer below.
-    if (const auto it = m_runs.find(runControl); it != m_runs.end()) {
+    // no "\n"), in which case it is still sitting in the buffer; emit (and keep) it now
+    // rather than lose it with the buffer.
+    if (it != m_runs.end()) {
         const QList<OutputLineSplitter::Line> pending = it->splitter.flush();
+        for (const OutputLineSplitter::Line &line : pending)
+            addToHistory(*it, line);
         if (runControl == m_active) {
             for (const OutputLineSplitter::Line &line : pending)
                 emit activeRunLineReceived(line.text, line.format);
@@ -167,13 +205,22 @@ void RunTracker::untrackRunControl(RunControl *runControl)
     // stray late appendMessage() would re-create the run's hash entry via operator[] on a
     // run we have deliberately stopped buffering for.
     disconnect(runControl, nullptr, this, nullptr);
-    forgetRunControl(runControl);
+    const bool keep = it != m_runs.end() && m_finishedRunsKept > 0;
+    if (keep) {
+        it->running = false;
+        m_liveOrder.removeOne(runControl);
+        m_finishedOrder.append(runControl);
+        trimFinishedRuns();
+    } else {
+        forgetRunControl(runControl);
+    }
 
     // Deliberately do NOT touch m_active here: a run that has merely stopped keeps its
     // tabs on screen (like Application Output does) until a different run starts or the
     // RunControl itself is destroyed. The destroyed connection just dropped above is the
-    // one thing we still need, so re-establish it for the run we are still displaying.
-    if (m_active == runControl) {
+    // one thing we still need, so re-establish it for the run we are still displaying -- and
+    // for a finished run whose output is kept, to forget it when it goes.
+    if (m_active == runControl || m_runs.contains(runControl)) {
         connect(runControl, &QObject::destroyed, this, [this, runControl] {
             handleRunControlDestroyed(runControl);
         });
@@ -185,6 +232,7 @@ void RunTracker::forgetRunControl(RunControl *runControl)
 {
     m_runs.remove(runControl);
     m_liveOrder.removeOne(runControl);
+    m_finishedOrder.removeOne(runControl);
 }
 
 void RunTracker::handleRunControlDestroyed(RunControl *runControl)

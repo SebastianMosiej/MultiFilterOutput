@@ -59,6 +59,14 @@ public:
     // The runs being listened to -- started and not yet stopped -- oldest first.
     QList<ProjectExplorer::RunControl *> liveRunControls() const;
 
+    // Stopped runs whose output is still kept, oldest first: the latest `count` of them (see
+    // setFinishedRunsKept()), for as long as their RunControl exists -- Application Output
+    // keeps it while it has a tab for the run. They can be switched to with pinRunControl()
+    // like live runs; a Re-run makes one live again, with fresh history.
+    QList<ProjectExplorer::RunControl *> finishedRunControls() const;
+    // 0 (the default): a run's output is dropped as soon as it stops.
+    void setFinishedRunsKept(int count);
+
     // Every live run's recent output, active or not, so switching to a run can show what it
     // printed before the switch. Bounded per run by setHistoryLimit() (oldest lines go
     // first); dropped when the run stops.
@@ -90,9 +98,13 @@ private:
     // `isSwitch`: see lastActivationWasSwitch().
     void activateRunControl(ProjectExplorer::RunControl *runControl, bool isSwitch = false);
     void forgetRunControl(ProjectExplorer::RunControl *runControl);
+    // Forgets the oldest finished runs beyond m_finishedRunsKept.
+    void trimFinishedRuns();
 
+    // A live run, or a finished one whose output is kept (running == false).
     struct LiveRun
     {
+        bool running = true;
         OutputLineSplitter splitter;
         QList<HistoryLine> history;
         qsizetype historyCharacters = 0;
@@ -101,6 +113,8 @@ private:
 
     QHash<ProjectExplorer::RunControl *, LiveRun> m_runs;
     QList<ProjectExplorer::RunControl *> m_liveOrder; // oldest first
+    QList<ProjectExplorer::RunControl *> m_finishedOrder; // oldest (first to go) first
+    int m_finishedRunsKept = 0;
     ProjectExplorer::RunControl *m_active = nullptr;
     FollowMode m_followMode = FollowMode::NewestRun;
     bool m_lastActivationWasSwitch = false;
