@@ -65,7 +65,7 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     settings->endGroup();
 
     m_lineQueue = new LineQueue(
-        [this](const QString &line, Utils::OutputFormat format) { processLine(line, format); },
+        [this](const QString &line, Utils::OutputFormat format, qint64) { processLine(line, format); },
         std::chrono::milliseconds(10),
         this);
     m_lineQueue->setOverflowHandling(

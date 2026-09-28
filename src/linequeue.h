@@ -24,7 +24,10 @@ class MULTIFILTEROUTPUT_EXPORT LineQueue : public QObject
     Q_OBJECT
 
 public:
-    using Sink = std::function<void(const QString &line, Utils::OutputFormat format)>;
+    // receivedAt: when the line was enqueued (ms since the epoch) -- i.e. when the pane got
+    // it, not when a later slice gets around to it.
+    using Sink = std::function<void(
+        const QString &line, Utils::OutputFormat format, qint64 receivedAt)>;
     // Called, in order, in place of lines dropped because the backlog overflowed.
     using DiscardSink = std::function<void(int discardedLines)>;
 
@@ -70,7 +73,13 @@ private:
 
     Sink m_sink;
     std::chrono::milliseconds m_budget;
-    QQueue<std::pair<QString, Utils::OutputFormat>> m_queue;
+    struct QueuedLine
+    {
+        QString line;
+        Utils::OutputFormat format;
+        qint64 receivedAt;
+    };
+    QQueue<QueuedLine> m_queue;
     qsizetype m_queuedCharacters = 0;
     qsizetype m_maxQueuedCharacters = DefaultMaxQueuedCharacters;
     DiscardSink m_discardSink;

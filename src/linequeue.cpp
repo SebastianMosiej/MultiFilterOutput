@@ -1,5 +1,6 @@
 #include "linequeue.h"
 
+#include <QDateTime>
 #include <QElapsedTimer>
 
 #include <utility>
@@ -59,12 +60,12 @@ void LineQueue::reportDiscards()
 
 void LineQueue::enqueue(const QString &line, Utils::OutputFormat format)
 {
-    m_queue.enqueue({line, format});
+    m_queue.enqueue({line, format, QDateTime::currentMSecsSinceEpoch()});
     m_queuedCharacters += line.size();
     if (m_queuedCharacters > m_maxQueuedCharacters) {
         // Oldest first, down to half the cap; the newest line always stays.
         while (m_queue.size() > 1 && m_queuedCharacters > m_maxQueuedCharacters / 2) {
-            m_queuedCharacters -= m_queue.dequeue().first.size();
+            m_queuedCharacters -= m_queue.dequeue().line.size();
             ++m_discardedPending;
         }
     }
@@ -104,9 +105,9 @@ int LineQueue::processPending()
     while (!m_queue.isEmpty()) {
         // Everything dropped came before whatever is still queued.
         reportDiscards();
-        const auto [line, format] = m_queue.dequeue();
+        const auto [line, format, receivedAt] = m_queue.dequeue();
         m_queuedCharacters -= line.size();
-        m_sink(line, format);
+        m_sink(line, format, receivedAt);
         ++processed;
         if (elapsed.durationElapsed() >= m_budget)
             break;

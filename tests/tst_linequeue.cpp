@@ -22,6 +22,7 @@ private slots:
     void floodIsKeptByDefault();
     void hopelessBacklogIsDiscardedWhenEnabled();
     void drainingBacklogIsKept();
+    void sinkGetsTheTimeTheLineWasQueued();
 };
 
 // Enqueuing must return straight away -- the whole point is that the caller (a RunControl
@@ -29,7 +30,7 @@ private slots:
 void tst_LineQueue::linesReachSinkFromEventLoopInOrder()
 {
     QStringList received;
-    LineQueue queue([&](const QString &line, Utils::OutputFormat) { received << line; });
+    LineQueue queue([&](const QString &line, Utils::OutputFormat, qint64) { received << line; });
 
     queue.enqueue("a", Utils::StdOutFormat);
     queue.enqueue("b", Utils::StdErrFormat);
@@ -47,7 +48,7 @@ void tst_LineQueue::oneSliceStopsAtTimeBudget()
 {
     int received = 0;
     LineQueue queue(
-        [&](const QString &, Utils::OutputFormat) {
+        [&](const QString &, Utils::OutputFormat, qint64) {
             std::this_thread::sleep_for(5ms);
             ++received;
         },
@@ -67,7 +68,7 @@ void tst_LineQueue::oneSliceStopsAtTimeBudget()
 void tst_LineQueue::clearDropsPendingLines()
 {
     QStringList received;
-    LineQueue queue([&](const QString &line, Utils::OutputFormat) { received << line; });
+    LineQueue queue([&](const QString &line, Utils::OutputFormat, qint64) { received << line; });
     queue.enqueue("old", Utils::StdOutFormat);
 
     queue.clear();
@@ -81,7 +82,7 @@ void tst_LineQueue::clearDropsPendingLines()
 void tst_LineQueue::overflowDropsOldestAndReportsItInOrder()
 {
     QStringList received;
-    LineQueue queue([&](const QString &line, Utils::OutputFormat) { received << line; });
+    LineQueue queue([&](const QString &line, Utils::OutputFormat, qint64) { received << line; });
     queue.setOverflowHandling(10, [&](int discarded) {
         received << QStringLiteral("[%1 discarded]").arg(discarded);
     });
@@ -98,7 +99,7 @@ void tst_LineQueue::backlogWithinCapLosesNothing()
 {
     QStringList received;
     int discards = 0;
-    LineQueue queue([&](const QString &line, Utils::OutputFormat) { received << line; });
+    LineQueue queue([&](const QString &line, Utils::OutputFormat, qint64) { received << line; });
     queue.setOverflowHandling(9, [&](int) { ++discards; });
 
     for (const char *line : {"aaa", "bbb", "ccc"})
@@ -113,7 +114,7 @@ void tst_LineQueue::backlogWithinCapLosesNothing()
 void tst_LineQueue::clearForgetsUnreportedDiscards()
 {
     QStringList received;
-    LineQueue queue([&](const QString &line, Utils::OutputFormat) { received << line; });
+    LineQueue queue([&](const QString &line, Utils::OutputFormat, qint64) { received << line; });
     queue.setOverflowHandling(4, [&](int discarded) {
         received << QStringLiteral("[%1 discarded]").arg(discarded);
     });
@@ -144,7 +145,7 @@ static QStringList runFlood(LineQueue &queue, QStringList &received)
 void tst_LineQueue::floodIsDiscardedWhenEnabled()
 {
     QStringList received;
-    LineQueue queue([&](const QString &line, Utils::OutputFormat) { received << line; }, 0ms);
+    LineQueue queue([&](const QString &line, Utils::OutputFormat, qint64) { received << line; }, 0ms);
     queue.setOverflowHandling(LineQueue::DefaultMaxQueuedCharacters, [&](int discarded) {
         received << QStringLiteral("[%1 discarded]").arg(discarded);
     });
@@ -164,7 +165,7 @@ void tst_LineQueue::floodIsDiscardedWhenEnabled()
 void tst_LineQueue::floodIsKeptByDefault()
 {
     QStringList received;
-    LineQueue queue([&](const QString &line, Utils::OutputFormat) { received << line; }, 0ms);
+    LineQueue queue([&](const QString &line, Utils::OutputFormat, qint64) { received << line; }, 0ms);
     queue.setOverflowHandling(LineQueue::DefaultMaxQueuedCharacters, [&](int discarded) {
         received << QStringLiteral("[%1 discarded]").arg(discarded);
     });
@@ -181,7 +182,7 @@ void tst_LineQueue::hopelessBacklogIsDiscardedWhenEnabled()
 {
     QStringList received;
     LineQueue queue(
-        [&](const QString &line, Utils::OutputFormat) {
+        [&](const QString &line, Utils::OutputFormat, qint64) {
             std::this_thread::sleep_for(10ms);
             received << line;
         },
@@ -203,7 +204,7 @@ void tst_LineQueue::hopelessBacklogIsDiscardedWhenEnabled()
 void tst_LineQueue::drainingBacklogIsKept()
 {
     QStringList received;
-    LineQueue queue([&](const QString &line, Utils::OutputFormat) { received << line; }, 0ms);
+    LineQueue queue([&](const QString &line, Utils::OutputFormat, qint64) { received << line; }, 0ms);
     queue.setOverflowHandling(LineQueue::DefaultMaxQueuedCharacters, [&](int discarded) {
         received << QStringLiteral("[%1 discarded]").arg(discarded);
     });
@@ -216,6 +217,22 @@ void tst_LineQueue::drainingBacklogIsKept()
 
     QCOMPARE(received.size(), 100);
     QCOMPARE(received.filter(" discarded]").size(), 0);
+}
+
+// Timestamps show when output arrived, not when a later slice got around to processing it.
+void tst_LineQueue::sinkGetsTheTimeTheLineWasQueued()
+{
+    qint64 receivedAt = -1;
+    LineQueue queue([&](const QString &, Utils::OutputFormat, qint64 at) { receivedAt = at; });
+
+    const qint64 before = QDateTime::currentMSecsSinceEpoch();
+    queue.enqueue("line", Utils::StdOutFormat);
+    const qint64 after = QDateTime::currentMSecsSinceEpoch();
+    std::this_thread::sleep_for(50ms);
+
+    QTRY_VERIFY(receivedAt != -1);
+    QVERIFY2(receivedAt >= before && receivedAt <= after,
+             qPrintable(QStringLiteral("%1 not in [%2, %3]").arg(receivedAt).arg(before).arg(after)));
 }
 
 QTEST_GUILESS_MAIN(tst_LineQueue)
