@@ -6,8 +6,12 @@
 #include "pattern.h"
 #include "patternexchange.h"
 #include "patternlibrary.h"
+#include "projectpatterns.h"
 
 #include <coreplugin/icore.h>
+
+#include <projectexplorer/project.h>
+#include <projectexplorer/projectmanager.h>
 
 #include <utils/fileutils.h>
 #include <utils/guiutils.h>
@@ -22,6 +26,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -262,6 +267,15 @@ public:
         connect(exportButton, &QPushButton::clicked, this, &PatternLibraryWidget::exportPatternFile);
         buttonColumn->addWidget(importButton);
         buttonColumn->addWidget(exportButton);
+        m_shareButton = new QPushButton(Tr::tr("Share with Project..."), this);
+        m_shareButton->setToolTip(
+            Tr::tr("Copy the selected pattern, as edited here, into an open project's "
+                   ".qtcreator/multifilteroutput-patterns.json -- commit that file and everyone "
+                   "working on the project gets the pattern. A pattern of the same id already "
+                   "there is replaced."));
+        m_shareButton->setEnabled(false);
+        connect(m_shareButton, &QPushButton::clicked, this, &PatternLibraryWidget::shareWithProject);
+        buttonColumn->addWidget(m_shareButton);
 
         auto *topRow = new QHBoxLayout;
         topRow->addWidget(m_tree);
@@ -497,6 +511,7 @@ private:
         m_contextBeforeSpin->setEnabled(enabled);
         m_contextAfterSpin->setEnabled(enabled);
         m_removeButton->setEnabled(enabled);
+        m_shareButton->setEnabled(enabled);
         updateContinuationFieldEnabled();
     }
 
@@ -607,6 +622,55 @@ private:
         if (!parsed.warnings.isEmpty())
             summary += "\n\n" + parsed.warnings.join("\n");
         QMessageBox::information(this, title, summary);
+    }
+
+    void shareWithProject()
+    {
+        using namespace ProjectExplorer;
+        const QString title = Tr::tr("Share with Project");
+        const auto pattern = patternAt(m_currentId);
+        if (!pattern)
+            return;
+        const QList<Project *> projects = ProjectManager::projects();
+        if (projects.isEmpty()) {
+            QMessageBox::information(this, title, Tr::tr("Open the project to share it with first."));
+            return;
+        }
+        Project *project = ProjectManager::startupProject();
+        if (projects.size() > 1) {
+            QStringList names;
+            for (Project *p : projects)
+                names << p->displayName();
+            bool ok = false;
+            const QString chosen = QInputDialog::getItem(
+                this,
+                title,
+                Tr::tr("Share \"%1\" with:").arg(pattern->name),
+                names,
+                std::max(0, int(projects.indexOf(project))),
+                false,
+                &ok);
+            if (!ok)
+                return;
+            project = projects.at(names.indexOf(chosen));
+        }
+        if (!project)
+            project = projects.first();
+
+        const Utils::FilePath directory = project->projectDirectory();
+        if (const Utils::Result<> shared = projectPatterns().share(directory, {*pattern}); !shared) {
+            QMessageBox::warning(this, title, shared.error());
+            return;
+        }
+        QMessageBox::information(
+            this,
+            title,
+            Tr::tr("\"%1\" is now in %2. Commit that file to share it with everyone working on "
+                   "%3.")
+                .arg(
+                    pattern->name,
+                    ProjectPatterns::patternFile(directory).toUserOutput(),
+                    project->displayName()));
     }
 
     void addPattern()
@@ -846,6 +910,7 @@ private:
     QPushButton *m_colorButton;
     QLabel *m_errorLabel;
     QPushButton *m_removeButton;
+    QPushButton *m_shareButton;
     QPushButton *m_moveUpButton;
     QPushButton *m_moveDownButton;
     QList<Pattern> m_workingPatterns;

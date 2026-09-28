@@ -9,6 +9,7 @@
 #include "outputpanetabbar.h"
 #include "outputtabwidget.h"
 #include "patternlibrary.h"
+#include "projectpatterns.h"
 #include "tablabel.h"
 
 #include <coreplugin/coreconstants.h>
@@ -93,6 +94,15 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
         &PatternLibrary::patternsChanged,
         this,
         [this] { refreshPatternTabs(); });
+    // ...and edits to the run's project's shared patterns (a pull, a Share with Project).
+    connect(
+        &projectPatterns(),
+        &ProjectPatterns::patternsChanged,
+        this,
+        [this](const Utils::FilePath &projectDirectory) {
+            if (!projectDirectory.isEmpty() && projectDirectory == activeProjectDirectory())
+                refreshPatternTabs();
+        });
     connect(&outputPaneSettings(), &OutputPaneSettings::showUnmatchedTabChanged, this, [this] {
         refreshPatternTabs(/*force=*/true);
     });
@@ -534,10 +544,28 @@ QStringList FilteredOutputPane::launchPatternIds(RunControl *runControl) const
 
 QList<Pattern> FilteredOutputPane::runPatterns() const
 {
-    // Library order, not m_runPatternIds order: the latter is just the order the boxes were
-    // ticked in, while the library's is the one the user deliberately arranges. Patterns
-    // deleted since the selection was saved are skipped silently.
-    return patternLibrary().patternsWithIds(m_runPatternIds);
+    // Library order (then the project's), not m_runPatternIds order: the latter is just the
+    // order the boxes were ticked in, while the library's is the one the user deliberately
+    // arranges. Patterns deleted since the selection was saved are skipped silently.
+    QList<Pattern> result;
+    for (const Pattern &pattern : availablePatterns()) {
+        if (m_runPatternIds.contains(pattern.id))
+            result.append(pattern);
+    }
+    return result;
+}
+
+Utils::FilePath FilteredOutputPane::activeProjectDirectory() const
+{
+    RunControl *run = m_runTracker->activeRunControl();
+    Project *project = run ? run->project() : nullptr;
+    return project ? project->projectDirectory() : Utils::FilePath();
+}
+
+QList<Pattern> FilteredOutputPane::availablePatterns() const
+{
+    return combinedPatterns(
+        patternLibrary().patterns(), projectPatterns().patterns(activeProjectDirectory()));
 }
 
 RunConfiguration *FilteredOutputPane::launchedRunConfiguration(RunControl *runControl) const
@@ -564,9 +592,12 @@ RunConfiguration *FilteredOutputPane::launchedRunConfiguration(RunControl *runCo
 
 void FilteredOutputPane::setPatternEnabledForRun(const QString &id, bool enabled)
 {
-    const std::optional<Pattern> pattern = patternLibrary().patternById(id);
+    const QList<Pattern> patterns = availablePatterns();
+    const auto pattern = std::find_if(patterns.cbegin(), patterns.cend(), [&](const Pattern &p) {
+        return p.id == id;
+    });
     setPatternsEnabledForRun(
-        {id}, enabled, Tr::tr("\"%1\"").arg(pattern ? pattern->name : id));
+        {id}, enabled, Tr::tr("\"%1\"").arg(pattern != patterns.cend() ? pattern->name : id));
 }
 
 void FilteredOutputPane::setPatternsEnabledForRun(
@@ -613,13 +644,19 @@ void FilteredOutputPane::fillPatternsMenu(QMenu *menu)
     menu->clear();
     const bool haveRun = m_runTracker->activeRunControl() != nullptr;
     menu->addSection(Tr::tr("Filter This Run By"));
-    const QList<Pattern> patterns = patternLibrary().patterns();
+    const QList<Pattern> patterns = availablePatterns();
+    const QList<Pattern> shared = projectPatterns().patterns(activeProjectDirectory());
     if (patterns.isEmpty()) {
         menu->addAction(Tr::tr("No patterns defined"))->setEnabled(false);
     }
     for (const Pattern &pattern : patterns) {
-        QAction *action = menu->addAction(
-            pattern.invert ? Tr::tr("Not: %1").arg(pattern.name) : pattern.name);
+        QString text = pattern.invert ? Tr::tr("Not: %1").arg(pattern.name) : pattern.name;
+        if (std::any_of(shared.cbegin(), shared.cend(), [&](const Pattern &p) {
+                return p.id == pattern.id;
+            })) {
+            text = Tr::tr("%1 (project)").arg(text);
+        }
+        QAction *action = menu->addAction(text);
         action->setCheckable(true);
         action->setChecked(m_runPatternIds.contains(pattern.id));
         action->setEnabled(haveRun);

@@ -7,6 +7,7 @@
 #include "outputpanesettings.h"
 #include "patternlibrary.h"
 #include "patternlibrarysettingspage.h"
+#include "projectpatterns.h"
 #include "runtracker.h"
 
 #include <coreplugin/dialogs/ioptionspage.h>
@@ -39,6 +40,18 @@ void MultiFilterOutputPlugin::initialize()
     outputPaneSettings().load();
 
     ProjectExplorer::RunConfiguration::registerAspect<FilterSetAspect>();
+
+    connect(
+        &projectPatterns(),
+        &ProjectPatterns::problemsFound,
+        this,
+        [](const Utils::FilePath &file, const QStringList &problems) {
+            for (const QString &problem : problems) {
+                Core::MessageManager::writeSilently(
+                    Tr::tr("MultiFilterOutput: %1: %2").arg(file.toUserOutput(), problem));
+            }
+        });
+    attachProjectPatternsToProjectManager();
 
     m_runTracker = new RunTracker;
     m_runTracker->attachToProjectExplorer();

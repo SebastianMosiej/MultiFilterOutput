@@ -7,6 +7,8 @@
 
 #include <coreplugin/ioutputpane.h>
 
+#include <utils/filepath.h>
+
 #include <QList>
 #include <QPointer>
 
@@ -59,6 +61,10 @@ private:
     QStringList launchPatternIds(ProjectExplorer::RunControl *runControl) const;
     // The patterns filtering the active run (m_runPatternIds), in Pattern Library order.
     QList<Pattern> runPatterns() const;
+    // What the active run can be filtered by: the library plus its project's shared patterns
+    // (see combinedPatterns()).
+    QList<Pattern> availablePatterns() const;
+    Utils::FilePath activeProjectDirectory() const;
     // The RunConfiguration a run was started from, if it can be identified unambiguously.
     ProjectExplorer::RunConfiguration *launchedRunConfiguration(
         ProjectExplorer::RunControl *runControl) const;

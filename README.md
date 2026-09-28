@@ -12,6 +12,14 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   matches"), a tab color, and an order (drag-and-drop or **Move Up**/**Move
   Down**) that also determines each pattern's left-to-right tab position.
   Managed under **Tools > Options > MultiFilterOutput > Pattern Library**.
+- **Project-shared patterns** — patterns in
+  `<project>/.qtcreator/multifilteroutput-patterns.json` (the *Export...*
+  format) are offered to that project's run configurations and in the pane,
+  marked *(project)*, next to your own library — commit the file and the
+  whole team gets them. **Share with Project...** on the Pattern Library page
+  copies a pattern into an open project's file; changes on disk (a pull, a
+  checkout) are picked up live. A shared pattern replaces a library one with
+  the same id.
 - **Import/export** — **Export...** on the Pattern Library page saves every
   pattern to a JSON file, **Import...** merges one back in by pattern id:
   new patterns are added, identical ones skipped, and for changed ones you
