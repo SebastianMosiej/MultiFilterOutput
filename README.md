@@ -56,6 +56,10 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   settings page. (If *Application Output*'s own "Open Application Output when
   running" preference is set to **Always** rather than the default **On First
   Output Only**, it can still reclaim focus on later output lines.)
+- **Matched text highlighted** — in each pattern tab, the text its pattern
+  matched is highlighted, in a faint shade of the pattern's tab color (or
+  the theme's highlight color). Optionally in **All** too — off by default,
+  on the Pattern Library settings page.
 - **Unmatched tab** — alongside **All** and the pattern tabs, an
   **Unmatched** tab collects the lines none of the run's patterns took (as a
   match or a grouped continuation line) — whatever your patterns don't yet
@@ -236,7 +240,8 @@ Creator version — see **Requirements**.
    Position**), whether clicking a line in a pattern tab should jump to
    **All** or just behave like a normal text click, whether the pane
    should take focus away from **Application Output** when a run starts,
-   whether to show the **Unmatched** tab, the **Maximum displayed line
+   whether to show the **Unmatched** tab, whether to highlight matches in
+   **All** too, the **Maximum displayed line
    length** for all tabs, and how much output each tab keeps (**Keep per tab
    at most** — by default the same as *Application Output*'s "Limit output
    to ... characters"; the oldest lines go first).

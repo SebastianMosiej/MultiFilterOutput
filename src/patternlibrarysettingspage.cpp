@@ -158,6 +158,16 @@ public:
         connect(maxLineLengthSpin, &QSpinBox::valueChanged, this, [](int value) {
             outputPaneSettings().setMaxDisplayedLineLength(value);
         });
+        auto *highlightInAllCheck = new QCheckBox(
+            Tr::tr("Highlight matched text in the All tab too"), this);
+        highlightInAllCheck->setToolTip(
+            Tr::tr("Pattern tabs always highlight what their pattern matched. This also does "
+                   "it in All, in each pattern's color, for output arriving from now on."));
+        highlightInAllCheck->setChecked(outputPaneSettings().highlightMatchesInAll());
+        connect(highlightInAllCheck, &QCheckBox::toggled, this, [](bool checked) {
+            outputPaneSettings().setHighlightMatchesInAll(checked);
+        });
+
         auto *maxCharactersSpin = new QSpinBox(this);
         maxCharactersSpin->setRange(0, std::numeric_limits<int>::max());
         maxCharactersSpin->setSingleStep(1'000'000);
@@ -290,6 +300,7 @@ public:
         layout->addWidget(jumpToAllCheck);
         layout->addWidget(focusOnRunStartCheck);
         layout->addWidget(unmatchedCheck);
+        layout->addWidget(highlightInAllCheck);
         layout->addLayout(maxLineLengthRow);
         layout->addLayout(maxCharactersRow);
         layout->addLayout(topRow);

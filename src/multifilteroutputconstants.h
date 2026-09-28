@@ -15,6 +15,7 @@ const char MAX_DISPLAYED_LINE_LENGTH_KEY[] = "MaxDisplayedLineLength";
 const char WORD_WRAP_KEY[] = "WordWrap";
 const char SHOW_UNMATCHED_TAB_KEY[] = "ShowUnmatchedTab";
 const char MAX_CHARACTERS_PER_TAB_KEY[] = "MaxCharactersPerTab";
+const char HIGHLIGHT_IN_ALL_KEY[] = "HighlightMatchesInAll";
 // The pane's action context, so the zoom shortcuts (Ctrl++ / Ctrl+- / Ctrl+0) reach it.
 const char PANE_CONTEXT[] = "MultiFilterOutput.PaneContext";
 

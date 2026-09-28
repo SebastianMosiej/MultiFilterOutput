@@ -224,6 +224,15 @@ qsizetype FilteredOutputPane::maxCharactersPerTab() const
         .toLongLong();
 }
 
+QColor FilteredOutputPane::highlightColor(const Pattern &pattern)
+{
+    if (!pattern.color.isValid())
+        return Utils::creatorTheme()->color(Utils::Theme::TextColorHighlightBackground);
+    QColor faint = pattern.color;
+    faint.setAlpha(70);
+    return faint;
+}
+
 void FilteredOutputPane::applyWordWrap(OutputTabWidget *tab)
 {
     tab->setLineWrapMode(
@@ -647,23 +656,30 @@ void FilteredOutputPane::processLine(const QString &line, Utils::OutputFormat fo
     const int allLine = m_allTab->appendLine(line, format);
 
     const bool couldNavigate = canNext();
-    if (routeToPatternTabs(line, format, allLine))
+    if (routeToPatternTabs(line, format, allLine, /*allLineIsLast=*/true))
         m_allTab->markLastLineAsMatch();
     if (canNext() != couldNavigate)
         navigateStateChanged();
 }
 
 bool FilteredOutputPane::routeToPatternTabs(
-    const QString &line, Utils::OutputFormat format, int allLine)
+    const QString &line, Utils::OutputFormat format, int allLine, bool allLineIsLast)
 {
     const LineRouter::Result result = m_router.route(line);
+    const bool highlightInAll = allLineIsLast && outputPaneSettings().highlightMatchesInAll();
     bool matchedAnyPattern = false;
     for (const LineRouter::Route &route : result.routes) {
-        OutputTabWidget *tab = m_patternTabs.at(route.patternIndex).tab;
+        const PatternTab &entry = m_patternTabs.at(route.patternIndex);
+        OutputTabWidget *tab = entry.tab;
         tab->appendLine(line, format, allLine, route.countsAsMatch);
         if (route.countsAsMatch) {
             tab->markLastLineAsMatch();
             matchedAnyPattern = true;
+            // Computed on each tab's line as shown -- the spans must point into that text.
+            const QColor color = highlightColor(entry.pattern);
+            tab->highlightLastLine(matchSpans(entry.pattern, tab->lastLineText()), color);
+            if (highlightInAll)
+                m_allTab->highlightLastLine(matchSpans(entry.pattern, m_allTab->lastLineText()), color);
         }
     }
     if (result.unmatched) {
@@ -725,7 +741,7 @@ void FilteredOutputPane::refreshPatternTabs(bool force)
             m_router.resetContinuations();
             continue;
         }
-        if (routeToPatternTabs(line.text, line.format, line.lineId))
+        if (routeToPatternTabs(line.text, line.format, line.lineId, /*allLineIsLast=*/false))
             m_allTab->markLineAsMatch(line.lineId);
     }
     for (const PatternTab &entry : std::as_const(m_patternTabs))

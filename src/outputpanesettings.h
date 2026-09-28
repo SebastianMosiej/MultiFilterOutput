@@ -61,6 +61,12 @@ public:
     qsizetype maxCharactersPerTab() const;
     void setMaxCharactersPerTab(qsizetype characters);
 
+    // Whether matched text is also highlighted in the All tab (in each pattern's color), not
+    // just in the pattern tabs. Off by default. Read fresh for every line, so a change applies
+    // to output arriving from then on.
+    bool highlightMatchesInAll() const;
+    void setHighlightMatchesInAll(bool enabled);
+
     void load();
 
 signals:
@@ -78,6 +84,7 @@ private:
     bool m_wordWrap = true;
     bool m_showUnmatchedTab = true;
     qsizetype m_maxCharactersPerTab = 0;
+    bool m_highlightMatchesInAll = false;
 };
 
 MULTIFILTEROUTPUT_EXPORT OutputPaneSettings &outputPaneSettings();

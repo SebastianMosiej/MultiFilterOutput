@@ -72,7 +72,13 @@ private:
     void createPatternTabs(ProjectExplorer::Project *project, const QList<Pattern> &patterns);
     // Appends one line to every pattern tab it belongs in (All already has it, as allLine);
     // returns whether any pattern matched it.
-    bool routeToPatternTabs(const QString &line, Utils::OutputFormat format, int allLine);
+    // With allLineIsLast, All's newest line is this very line, so matches may be highlighted
+    // there too (not so when replaying All's old lines, see refreshPatternTabs()).
+    bool routeToPatternTabs(
+        const QString &line, Utils::OutputFormat format, int allLine, bool allLineIsLast);
+    // The background a pattern's matched text gets: its tab color, faint enough to keep the
+    // text readable, or the theme's highlight background if it has none.
+    static QColor highlightColor(const Pattern &pattern);
     // Rebuilds the pattern tabs when this run's patterns changed -- edited in the library,
     // or toggled from the pane -- and replays All through them.
     void refreshPatternTabs(bool force = false);

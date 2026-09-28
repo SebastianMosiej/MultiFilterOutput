@@ -147,6 +147,24 @@ void OutputPaneSettings::setMaxCharactersPerTab(qsizetype characters)
     emit maxCharactersPerTabChanged(m_maxCharactersPerTab);
 }
 
+bool OutputPaneSettings::highlightMatchesInAll() const
+{
+    return m_highlightMatchesInAll;
+}
+
+void OutputPaneSettings::setHighlightMatchesInAll(bool enabled)
+{
+    if (m_highlightMatchesInAll == enabled)
+        return;
+    m_highlightMatchesInAll = enabled;
+
+    Utils::QtcSettings *settings = Core::ICore::settings();
+    settings->beginGroup(Constants::SETTINGS_GROUP);
+    settings->setValue(Constants::HIGHLIGHT_IN_ALL_KEY, enabled);
+    settings->endGroup();
+    settings->sync();
+}
+
 void OutputPaneSettings::load()
 {
     Utils::QtcSettings *settings = Core::ICore::settings();
@@ -158,6 +176,7 @@ void OutputPaneSettings::load()
     // Clamped like setMaxDisplayedLineLength(): a hand-edited negative value means no limit.
     m_wordWrap = settings->value(Constants::WORD_WRAP_KEY, true).toBool();
     m_showUnmatchedTab = settings->value(Constants::SHOW_UNMATCHED_TAB_KEY, true).toBool();
+    m_highlightMatchesInAll = settings->value(Constants::HIGHLIGHT_IN_ALL_KEY, false).toBool();
     m_maxCharactersPerTab = qMax<qsizetype>(
         0, settings->value(Constants::MAX_CHARACTERS_PER_TAB_KEY, 0).toLongLong());
     m_maxDisplayedLineLength = qMax(
