@@ -47,6 +47,8 @@ add_qtc_plugin(MultiFilterOutput
     src/linequeue.cpp
     src/linerouter.h
     src/linerouter.cpp
+    src/patternexchange.h
+    src/patternexchange.cpp
     src/patternlibrary.h
     src/patternlibrary.cpp
     src/patternlibrarysettingspage.h
@@ -127,6 +129,10 @@ if(WITH_TESTS)
     SOURCES tests/tst_linerouter.cpp
     DEPENDS MultiFilterOutput
   )
+  add_qtc_test(tst_patternexchange
+    SOURCES tests/tst_patternexchange.cpp
+    DEPENDS MultiFilterOutput
+  )
   add_qtc_test(tst_runtracker
     SOURCES tests/tst_runtracker.cpp
     DEPENDS MultiFilterOutput QtCreator::ProjectExplorer
@@ -159,6 +165,7 @@ if(WITH_TESTS)
       tst_linequeue
       tst_linerouter
       tst_runtracker
+      tst_patternexchange
       PROPERTIES ENVIRONMENT_MODIFICATION "${QtCreatorPathModification}"
     )
   endif()
