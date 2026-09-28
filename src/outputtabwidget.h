@@ -139,6 +139,12 @@ public:
     // appended from now on.
     void setMaxLineLength(int maxLength);
 
+    // Keeps at most this many characters, dropping the oldest lines as new ones arrive --
+    // Application Output's own kind of limit (see Core::OutputWindow::setMaxCharCount()), so
+    // the pane can follow its setting. The newest line is always kept, even if it alone is
+    // longer. 0 (the default) means no limit.
+    void setMaxCharacterCount(qsizetype maxCharacters);
+
     // Writes the tab's text, as shown, to `path` as UTF-8 -- "Save tab to file" in the pane's
     // toolbar.
     Utils::Result<> saveContents(const Utils::FilePath &path) const;
@@ -166,6 +172,9 @@ protected:
     // holds it.
     QTextBlock blockForLine(int lineId) const;
 
+    // Drops the oldest lines so that incomingCharacters more fit in the character limit.
+    void makeRoomFor(qsizetype incomingCharacters);
+
     // Applies the current filter to a line just appended.
     void filterAppendedLine(QTextBlock block);
 
@@ -182,6 +191,7 @@ private:
     // then just finds nothing.
     int m_matchStops = 0;
     int m_maxLineLength = 0;
+    qsizetype m_maxCharacters = 0;
     LineFilter m_filter;
     // After-context lines still to reveal after the last matching line appended.
     int m_afterContextRemaining = 0;

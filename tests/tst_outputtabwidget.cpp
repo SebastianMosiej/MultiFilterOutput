@@ -44,6 +44,9 @@ private slots:
     void linesReportTextFormatIdAndNotices();
     void linesOnlyReportWhatTheTabStillHolds();
     void matchStopsCanBeReassignedByLineId();
+    void characterLimitDropsOldestLines();
+    void characterLimitKeepsNewestLineEvenIfLonger();
+    void noCharacterLimitByDefault();
 
 private:
     // Clicks the given block of `tab` and returns what jumpRequested() carried, or -2 if it
@@ -508,6 +511,53 @@ void tst_OutputTabWidget::matchStopsCanBeReassignedByLineId()
     tab.moveCursor(QTextCursor::End);
     QCOMPARE(tab.goToMatch(OutputTabWidget::Direction::Backward), 1);
     QCOMPARE(tab.goToMatch(OutputTabWidget::Direction::Backward), 1); // the only stop
+}
+
+// Application Output limits what it keeps in characters (10 million by default), not lines;
+// a tab following that setting keeps the newest lines within the limit.
+void tst_OutputTabWidget::characterLimitDropsOldestLines()
+{
+    OutputTabWidget tab;
+    // Each 9-character line takes 10 characters with its block separator, plus 1 for the
+    // trailing empty block: 3 lines would be 31 > 30.
+    tab.setMaxCharacterCount(30);
+    for (int i = 0; i < 10; ++i) {
+        tab.appendLine(QStringLiteral("line %1").arg(i, 4, 10, QChar('0')), Utils::StdOutFormat);
+        QVERIFY2(tab.document()->characterCount() <= 30,
+                 qPrintable(QString::number(tab.document()->characterCount())));
+    }
+
+    const QList<OutputTabWidget::Line> lines = tab.lines();
+    QCOMPARE(lines.size(), 2);
+    QCOMPARE(lines.first().text, QStringLiteral("line 0008"));
+    QCOMPARE(lines.last().text, QStringLiteral("line 0009"));
+    // Trimmed through the same front-of-document mechanism line ids are built to survive.
+    QCOMPARE(lines.last().lineId, 9);
+}
+
+void tst_OutputTabWidget::characterLimitKeepsNewestLineEvenIfLonger()
+{
+    OutputTabWidget tab;
+    tab.setMaxCharacterCount(10);
+    tab.appendLine("short", Utils::StdOutFormat);
+    tab.appendLine(QString(50, 'x'), Utils::StdOutFormat);
+
+    const QList<OutputTabWidget::Line> lines = tab.lines();
+    QCOMPARE(lines.size(), 1);
+    QCOMPARE(lines.first().text, QString(50, 'x'));
+}
+
+void tst_OutputTabWidget::noCharacterLimitByDefault()
+{
+    OutputTabWidget tab;
+    for (int i = 0; i < 60000; ++i)
+        tab.appendLine(QStringLiteral("line %1").arg(i), Utils::StdOutFormat);
+
+    // The old hard-coded cap was 50 000 lines.
+    QCOMPARE(tab.lines().size(), 60000);
+    // That cap also switched undo off as a side effect (a non-zero maximumBlockCount does);
+    // without it, every appended line would be stored a second time in the undo history.
+    QVERIFY(!tab.document()->isUndoRedoEnabled());
 }
 
 QTEST_MAIN(tst_OutputTabWidget)

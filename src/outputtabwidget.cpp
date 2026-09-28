@@ -105,7 +105,10 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
     : QPlainTextEdit(parent)
 {
     setReadOnly(true);
-    setMaximumBlockCount(50000);
+    // Like Core::OutputWindow: an output view has no use for undo, and keeping it would store
+    // every appended line a second time. (A non-zero maximumBlockCount used to disable it as a
+    // side effect; the limit is in characters now, see setMaxCharacterCount().)
+    setUndoRedoEnabled(false);
 
     // Ctrl+F: Qt Creator's Find toolbar searches the IFindSupport aggregated with the focused
     // widget (or a parent), and every output pane shares a Find toolbar placeholder -- so
@@ -169,7 +172,9 @@ int OutputTabWidget::appendLine(
         m_nextLineId = nextLineId(m_nextLineId);
     }
 
-    m_formatter.appendMessage(displayText(line, m_maxLineLength) + "\n", format);
+    const QString shown = displayText(line, m_maxLineLength);
+    makeRoomFor(shown.size() + 1); // + its block separator
+    m_formatter.appendMessage(shown + "\n", format);
     // appendMessage's trailing newline advances the cursor into a new, still-empty block, so
     // the block that actually holds the line just appended is the one before the last.
     // Nothing else sets userState on this document (there is no syntax highlighter), so it is
@@ -435,6 +440,34 @@ Utils::Result<> OutputTabWidget::saveContents(const Utils::FilePath &path) const
     if (!written)
         return Utils::ResultError(written.error());
     return Utils::ResultOk;
+}
+
+void OutputTabWidget::setMaxCharacterCount(qsizetype maxCharacters)
+{
+    m_maxCharacters = maxCharacters;
+    makeRoomFor(0); // a lower limit applies to what the tab already holds, too
+}
+
+void OutputTabWidget::makeRoomFor(qsizetype incomingCharacters)
+{
+    if (m_maxCharacters <= 0)
+        return;
+    // As Core::OutputWindow does it: drop whole blocks off the front -- the same way
+    // setMaximumBlockCount() trims, which line ids and match stops are built to survive --
+    // until the new text fits, but never the last block, which the new line goes into.
+    qsizetype planned = document()->characterCount() + incomingCharacters;
+    if (planned <= m_maxCharacters)
+        return;
+    int keepBlocks = document()->blockCount();
+    for (QTextBlock b = document()->firstBlock();
+         b.isValid() && planned > m_maxCharacters && keepBlocks > 1;
+         b = b.next()) {
+        planned -= b.length();
+        --keepBlocks;
+    }
+    setMaximumBlockCount(keepBlocks);
+    setMaximumBlockCount(0); // trimming done; 0 = no block limit
+    setUndoRedoEnabled(false);
 }
 
 void OutputTabWidget::setMaxLineLength(int maxLength)
