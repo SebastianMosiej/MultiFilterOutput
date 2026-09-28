@@ -1,6 +1,9 @@
 #pragma once
 
 #include "multifilteroutput_global.h"
+#include "pattern.h"
+
+#include <utils/filepath.h>
 
 #include <utils/aspects.h>
 
@@ -29,6 +32,12 @@ public:
     // ... and for every pattern in the library tagged `tag` (see Pattern::tags).
     void setGroupEnabled(const QString &tag, bool enabled);
 
+    // The project whose shared patterns (see ProjectPatterns) are offered next to the
+    // library's -- the run configuration's project; set from the constructor.
+    void setProjectDirectory(const Utils::FilePath &projectDirectory);
+    // What this run configuration can choose from: see combinedPatterns().
+    QList<Pattern> availablePatterns() const;
+
     QVariant variantValue() const override;
 
     void fromMap(const Utils::Store &map) override;
@@ -36,6 +45,7 @@ public:
 
 private:
     QStringList m_enabledPatternIds;
+    Utils::FilePath m_projectDirectory;
 };
 
 } // namespace MultiFilterOutput

@@ -4,8 +4,10 @@
 #include "multifilteroutputtr.h"
 #include "pattern.h"
 #include "patternlibrary.h"
+#include "projectpatterns.h"
 
 #include <projectexplorer/buildconfiguration.h>
+#include <projectexplorer/project.h>
 
 #include <utils/detailswidget.h>
 
@@ -20,7 +22,7 @@
 
 namespace MultiFilterOutput {
 
-FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
+FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *bc)
 {
     // Deliberately do NOT pass the BuildConfiguration to Utils::BaseAspect(): that would
     // self-register this aspect into the BuildConfiguration's own (non-owning) aspect
@@ -39,8 +41,10 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
     // calls fromMap() on its aspects -- only RunConfigurationFactory::restore() (loading an
     // already-saved one) does -- so this constructor-time seed only ever affects a run
     // configuration that has never been saved before; fromMap() unconditionally overwrites it
-    // for anything restored from disk.
-    for (const Pattern &pattern : patternLibrary().patterns()) {
+    // for anything restored from disk. The project's shared patterns count too.
+    if (bc && bc->project())
+        m_projectDirectory = bc->project()->projectDirectory();
+    for (const Pattern &pattern : availablePatterns()) {
         if (pattern.isDefault)
             m_enabledPatternIds.append(pattern.id);
     }
@@ -73,7 +77,7 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
         auto updateSummary = [this, guard = QPointer<Utils::DetailsWidget>(details)] {
             if (!guard)
                 return;
-            const QList<Pattern> patterns = patternLibrary().patterns();
+            const QList<Pattern> patterns = availablePatterns();
             const int active = std::count_if(
                 patterns.cbegin(), patterns.cend(), [this](const Pattern &p) {
                     return m_enabledPatternIds.contains(p.id);
@@ -101,7 +105,8 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
                 delete child->widget();
                 delete child;
             }
-            const QList<Pattern> patterns = patternLibrary().patterns();
+            const QList<Pattern> patterns = availablePatterns();
+            const QList<Pattern> shared = projectPatterns().patterns(m_projectDirectory);
 
             // One tri-state checkbox per group (see Pattern::tags): checked when all of its
             // patterns are active, partially when some are. A click activates the whole group
@@ -125,7 +130,7 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
                 layout->addWidget(groupsRow);
             }
             const auto updateGroups = [this, groupBoxes] {
-                const QList<Pattern> patterns = patternLibrary().patterns();
+                const QList<Pattern> patterns = availablePatterns();
                 for (const auto &[tag, groupBox] : groupBoxes) {
                     if (!groupBox)
                         continue;
@@ -153,7 +158,15 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
             }
 
             for (const Pattern &pattern : patterns) {
-                auto *checkBox = new QCheckBox(pattern.name);
+                const bool isShared = std::any_of(
+                    shared.cbegin(), shared.cend(), [&](const Pattern &p) { return p.id == pattern.id; });
+                auto *checkBox = new QCheckBox(
+                    isShared ? Tr::tr("%1 (project)").arg(pattern.name) : pattern.name);
+                if (isShared) {
+                    checkBox->setToolTip(Tr::tr("Shared through the project, in %1.")
+                                             .arg(ProjectPatterns::patternFile(m_projectDirectory)
+                                                      .toUserOutput()));
+                }
                 checkBox->setChecked(m_enabledPatternIds.contains(pattern.id));
                 connect(
                     checkBox,
@@ -174,6 +187,14 @@ FilterSetAspect::FilterSetAspect(ProjectExplorer::BuildConfiguration *)
         };
         rebuild();
         connect(&patternLibrary(), &PatternLibrary::patternsChanged, this, rebuild);
+        connect(
+            &projectPatterns(),
+            &ProjectPatterns::patternsChanged,
+            this,
+            [this, rebuild](const Utils::FilePath &projectDirectory) {
+                if (projectDirectory == m_projectDirectory)
+                    rebuild();
+            });
         // ...and when the selection is changed from outside these checkboxes (from the
         // MultiFilterOutput pane, see setPatternEnabled()). The checkboxes' own toggles edit
         // m_enabledPatternIds directly, without changed(), so a checkbox is never deleted from
@@ -216,7 +237,18 @@ void FilterSetAspect::setPatternsEnabled(const QStringList &ids, bool enabled)
 
 void FilterSetAspect::setGroupEnabled(const QString &tag, bool enabled)
 {
-    setPatternsEnabled(patternIdsWithTag(patternLibrary().patterns(), tag), enabled);
+    setPatternsEnabled(patternIdsWithTag(availablePatterns(), tag), enabled);
+}
+
+void FilterSetAspect::setProjectDirectory(const Utils::FilePath &projectDirectory)
+{
+    m_projectDirectory = projectDirectory;
+}
+
+QList<Pattern> FilterSetAspect::availablePatterns() const
+{
+    return combinedPatterns(
+        patternLibrary().patterns(), projectPatterns().patterns(m_projectDirectory));
 }
 
 QVariant FilterSetAspect::variantValue() const

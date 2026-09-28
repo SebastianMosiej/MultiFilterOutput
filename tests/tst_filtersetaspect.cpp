@@ -1,10 +1,13 @@
 #include "../src/filtersetaspect.h"
 #include "../src/pattern.h"
+#include "../src/patternexchange.h"
 #include "../src/patternlibrary.h"
+#include "../src/projectpatterns.h"
 
 #include <utils/store.h>
 
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest>
 
 using namespace MultiFilterOutput;
@@ -24,6 +27,7 @@ private slots:
     void selectionChangesAreSignalled();
     void setPatternsEnabledTogglesSeveralAtOnce();
     void setGroupEnabledTogglesEveryTaggedPattern();
+    void projectPatternsAreOfferedAndGrouped();
 };
 
 void tst_FilterSetAspect::defaultsToEmpty()
@@ -186,6 +190,37 @@ void tst_FilterSetAspect::setGroupEnabledTogglesEveryTaggedPattern()
 
     aspect.setGroupEnabled("no such group", true);
     QCOMPARE(changed.size(), 2);
+    patternLibrary().setPatterns({});
+}
+
+void tst_FilterSetAspect::projectPatternsAreOfferedAndGrouped()
+{
+    Pattern mine;
+    mine.id = "id-mine";
+    mine.name = "Mine";
+    mine.tags = {"team"};
+    patternLibrary().setPatterns({mine});
+    Pattern shared;
+    shared.id = "id-shared";
+    shared.name = "Shared";
+    shared.tags = {"team"};
+    QTemporaryDir dir;
+    const Utils::FilePath project = Utils::FilePath::fromString(dir.path());
+    const Utils::FilePath file = ProjectPatterns::patternFile(project);
+    QVERIFY(file.parentDir().ensureWritableDir());
+    QVERIFY(file.writeFileContents(exportPatterns({shared})));
+    projectPatterns().addProject(project);
+
+    FilterSetAspect aspect(nullptr);
+    QCOMPARE(aspect.availablePatterns().size(), 1); // no project: the library only
+    aspect.setProjectDirectory(project);
+    QCOMPARE(aspect.availablePatterns().size(), 2);
+    QCOMPARE(aspect.availablePatterns().last().name, QStringLiteral("Shared"));
+
+    aspect.setGroupEnabled("team", true);
+    QCOMPARE(aspect.enabledPatternIds(), (QStringList{"id-mine", "id-shared"}));
+
+    projectPatterns().removeProject(project);
     patternLibrary().setPatterns({});
 }
 
