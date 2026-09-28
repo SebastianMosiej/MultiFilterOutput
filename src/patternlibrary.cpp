@@ -90,22 +90,11 @@ QStringList PatternLibrary::load(Utils::QtcSettings *settings)
     const int count = settings->beginReadArray("patterns");
     for (int i = 0; i < count; ++i) {
         settings->setArrayIndex(i);
+        // Whatever keys the entry has -- Pattern::fromMap() picks the ones it knows. A field
+        // saved before it existed is simply absent, so fromMap()'s own default applies.
         QVariantMap map;
-        map.insert("id", settings->value("id"));
-        map.insert("name", settings->value("name"));
-        map.insert("patternText", settings->value("patternText"));
-        map.insert("isRegex", settings->value("isRegex"));
-        map.insert("caseSensitive", settings->value("caseSensitive"));
-        map.insert("invert", settings->value("invert"));
-        map.insert("color", settings->value("color"));
-        // Left unset (rather than inserted with a null QVariant) for patterns saved before
-        // this field existed, so fromMap()'s own default applies instead of an empty string.
-        if (settings->contains("groupContinuationLines"))
-            map.insert("groupContinuationLines", settings->value("groupContinuationLines"));
-        if (settings->contains("continuationPattern"))
-            map.insert("continuationPattern", settings->value("continuationPattern"));
-        if (settings->contains("isDefault"))
-            map.insert("isDefault", settings->value("isDefault"));
+        for (const Utils::Key &key : settings->childKeys())
+            map.insert(Utils::stringFromKey(key), settings->value(key));
         m_patterns.append(Pattern::fromMap(map));
     }
     settings->endArray();
@@ -165,17 +154,10 @@ void PatternLibrary::save() const
     settings->beginWriteArray("patterns", int(m_patterns.size()));
     for (int i = 0; i < m_patterns.size(); ++i) {
         settings->setArrayIndex(i);
+        // Every field Pattern::toMap() has, so a new field is persisted without touching this.
         const QVariantMap map = m_patterns.at(i).toMap();
-        settings->setValue("id", map.value("id"));
-        settings->setValue("name", map.value("name"));
-        settings->setValue("patternText", map.value("patternText"));
-        settings->setValue("isRegex", map.value("isRegex"));
-        settings->setValue("caseSensitive", map.value("caseSensitive"));
-        settings->setValue("invert", map.value("invert"));
-        settings->setValue("color", map.value("color"));
-        settings->setValue("groupContinuationLines", map.value("groupContinuationLines"));
-        settings->setValue("continuationPattern", map.value("continuationPattern"));
-        settings->setValue("isDefault", map.value("isDefault"));
+        for (auto it = map.cbegin(); it != map.cend(); ++it)
+            settings->setValue(Utils::keyFromString(it.key()), it.value());
     }
     settings->endArray();
 

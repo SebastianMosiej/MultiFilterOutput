@@ -274,13 +274,21 @@ void tst_PatternLibrary::roundTripKeepsEveryField()
     lib.load(&settings);
 
     Pattern p = makePattern("id-1", "Errors", "ERR(OR)?");
-    p.isRegex = true;
+    p.isRegex = false;
     p.caseSensitive = true;
     p.invert = true;
     p.color = QColor(Qt::red);
     p.groupContinuationLines = true;
     p.continuationPattern = "^\\s+";
     p.isDefault = true;
+    p.channels = Pattern::StdErrChannel;
+    // Every field off its default: a field Pattern::toMap() has but save()/load() miss shows
+    // up as a difference below.
+    const QVariantMap fields = p.toMap();
+    const QVariantMap defaults = Pattern().toMap();
+    QCOMPARE(fields.keys(), defaults.keys());
+    for (auto it = fields.cbegin(); it != fields.cend(); ++it)
+        QVERIFY2(it.value() != defaults.value(it.key()), qPrintable(it.key()));
     lib.addOrUpdate(p);
 
     const QList<Pattern> back = reloaded(settings);
