@@ -185,6 +185,39 @@ void OutputPaneSettings::setShowTimestamps(bool enabled)
     emit showTimestampsChanged(m_showTimestamps);
 }
 
+OutputPaneSettings::OldRunOutput OutputPaneSettings::oldRunOutput() const
+{
+    return m_oldRunOutput;
+}
+
+void OutputPaneSettings::setOldRunOutput(OldRunOutput mode)
+{
+    if (m_oldRunOutput == mode)
+        return;
+    m_oldRunOutput = mode;
+
+    Utils::QtcSettings *settings = Core::ICore::settings();
+    settings->beginGroup(Constants::SETTINGS_GROUP);
+    settings->setValue(Constants::OLD_RUN_OUTPUT_KEY, int(mode));
+    settings->endGroup();
+    settings->sync();
+
+    emit oldRunOutputChanged(m_oldRunOutput);
+}
+
+bool OutputPaneSettings::keepsOldRunOutput(OldRunOutput mode, bool applicationOutputClears)
+{
+    switch (mode) {
+    case OldRunOutput::Clear:
+        return false;
+    case OldRunOutput::KeepGreyedOut:
+        return true;
+    case OldRunOutput::LikeApplicationOutput:
+        break;
+    }
+    return !applicationOutputClears;
+}
+
 int OutputPaneSettings::finishedRunsKept() const
 {
     return m_finishedRunsKept;
@@ -219,6 +252,10 @@ void OutputPaneSettings::load()
     m_showUnmatchedTab = settings->value(Constants::SHOW_UNMATCHED_TAB_KEY, true).toBool();
     m_highlightMatchesInAll = settings->value(Constants::HIGHLIGHT_IN_ALL_KEY, false).toBool();
     m_showTimestamps = settings->value(Constants::SHOW_TIMESTAMPS_KEY, false).toBool();
+    const int oldRunOutput = settings->value(Constants::OLD_RUN_OUTPUT_KEY, 0).toInt();
+    m_oldRunOutput = oldRunOutput >= 0 && oldRunOutput <= int(OldRunOutput::KeepGreyedOut)
+                         ? OldRunOutput(oldRunOutput)
+                         : OldRunOutput::LikeApplicationOutput;
     m_finishedRunsKept = qMax(
         0, settings->value(Constants::FINISHED_RUNS_KEPT_KEY, DefaultFinishedRunsKept).toInt());
     m_maxCharactersPerTab = qMax<qsizetype>(

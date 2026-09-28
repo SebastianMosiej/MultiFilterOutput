@@ -169,6 +169,11 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   configuration's filter selection, the pane position, the zoom level, the
   click-to-jump setting, and the maximum displayed line length are all saved
   to Qt Creator's settings.
+- **Previous run's output** — like Application Output, a new run or Re-run can
+  keep the previous run's lines greyed out above a separator in every tab
+  (not counted, not stops for F6), or clear them: *Like Application Output*
+  (its *Clear old output on a new run* setting), *Clear it* or *Keep it
+  greyed out* on the Pattern Library page.
 - **Output survives the run** — a run's filtered tabs stay up after the
   process exits (matching Application Output's own behavior), so you can
   still review what happened after the app has closed. They only reset

@@ -17,6 +17,7 @@ const char SHOW_UNMATCHED_TAB_KEY[] = "ShowUnmatchedTab";
 const char MAX_CHARACTERS_PER_TAB_KEY[] = "MaxCharactersPerTab";
 const char HIGHLIGHT_IN_ALL_KEY[] = "HighlightMatchesInAll";
 const char SHOW_TIMESTAMPS_KEY[] = "ShowTimestamps";
+const char OLD_RUN_OUTPUT_KEY[] = "OldRunOutput";
 // Run configuration keys next to FILTER_SET_ASPECT_ID's pattern list (see FilterSetAspect).
 const char RUN_FOCUS_ON_RUN_START_KEY[] = "MultiFilterOutput.FilterSetAspect.FocusOnRunStart";
 const char RUN_SHOW_UNMATCHED_TAB_KEY[] = "MultiFilterOutput.FilterSetAspect.ShowUnmatchedTab";

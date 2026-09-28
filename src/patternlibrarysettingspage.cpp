@@ -20,6 +20,7 @@
 
 #include <QAbstractItemView>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QColorDialog>
 #include <QDropEvent>
 #include <QFormLayout>
@@ -207,6 +208,26 @@ public:
         connect(finishedRunsSpin, &QSpinBox::valueChanged, this, [](int value) {
             outputPaneSettings().setFinishedRunsKept(value);
         });
+        auto *oldRunCombo = new QComboBox(this);
+        // Item order follows OutputPaneSettings::OldRunOutput.
+        oldRunCombo->addItems(
+            {Tr::tr("Like Application Output"),
+             Tr::tr("Clear it"),
+             Tr::tr("Keep it greyed out")});
+        oldRunCombo->setCurrentIndex(int(outputPaneSettings().oldRunOutput()));
+        oldRunCombo->setToolTip(
+            Tr::tr("What a new run or Re-run does with the previous run's output in "
+                   "MultiFilterOutput's tabs. \"Like Application Output\" follows its \"Clear "
+                   "old output on a new run\" setting (Preferences > Build & Run > Application "
+                   "Output)."));
+        connect(oldRunCombo, &QComboBox::activated, this, [](int index) {
+            outputPaneSettings().setOldRunOutput(OutputPaneSettings::OldRunOutput(index));
+        });
+        auto *oldRunRow = new QHBoxLayout;
+        oldRunRow->addWidget(new QLabel(Tr::tr("Previous run's output on a new run:"), this));
+        oldRunRow->addWidget(oldRunCombo);
+        oldRunRow->addStretch();
+
         auto *finishedRunsRow = new QHBoxLayout;
         finishedRunsRow->addWidget(new QLabel(Tr::tr("Keep output of finished runs:"), this));
         finishedRunsRow->addWidget(finishedRunsSpin);
@@ -426,6 +447,7 @@ public:
         layout->addLayout(maxLineLengthRow);
         layout->addLayout(maxCharactersRow);
         layout->addLayout(finishedRunsRow);
+        layout->addLayout(oldRunRow);
         layout->addLayout(topRow);
         layout->addLayout(form);
 

@@ -72,6 +72,15 @@ public:
     bool showTimestamps() const;
     void setShowTimestamps(bool enabled);
 
+    // What a new run (or Re-run) does with the previous run's output in the pane's tabs:
+    // Application Output's choice (Preferences > Build & Run > Application Output > "Clear old
+    // output on a new run"; not set by default, so kept greyed out), or the pane's own.
+    enum class OldRunOutput { LikeApplicationOutput, Clear, KeepGreyedOut };
+    OldRunOutput oldRunOutput() const;
+    void setOldRunOutput(OldRunOutput mode);
+    // Whether `mode` keeps the old output, given Application Output's "clear" setting.
+    static bool keepsOldRunOutput(OldRunOutput mode, bool applicationOutputClears);
+
     // How many stopped runs' output the pane keeps so the run selector can switch back to
     // them (see RunTracker::setFinishedRunsKept()); 0 drops a run's output when it stops.
     static constexpr int DefaultFinishedRunsKept = 3;
@@ -88,6 +97,7 @@ signals:
     void maxCharactersPerTabChanged(qsizetype characters);
     void showTimestampsChanged(bool enabled);
     void finishedRunsKeptChanged(int count);
+    void oldRunOutputChanged(OldRunOutput mode);
 
 private:
     OutputPanePlacement m_placement = OutputPanePlacement::NextToApplicationOutput;
@@ -100,6 +110,7 @@ private:
     bool m_highlightMatchesInAll = false;
     bool m_showTimestamps = false;
     int m_finishedRunsKept = DefaultFinishedRunsKept;
+    OldRunOutput m_oldRunOutput = OldRunOutput::LikeApplicationOutput;
 };
 
 MULTIFILTEROUTPUT_EXPORT OutputPaneSettings &outputPaneSettings();

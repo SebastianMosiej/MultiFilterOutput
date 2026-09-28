@@ -97,7 +97,15 @@ private:
         Utils::OutputFormat format,
         int allLine,
         bool allLineIsLast,
-        qint64 timestamp);
+        qint64 timestamp,
+        bool fromOldRun = false);
+    // Re-routes every line All holds through the current pattern tabs (see
+    // refreshPatternTabs()); the previous run's lines, kept greyed out, stay so and don't
+    // count.
+    void replayAllIntoPatternTabs();
+    // Whether a new run keeps the previous run's output greyed out (see
+    // OutputPaneSettings::oldRunOutput()).
+    bool keepsOldRunOutput() const;
     // The background a pattern's matched text gets: its tab color, faint enough to keep the
     // text readable, or the theme's highlight background if it has none.
     static QColor highlightColor(const Pattern &pattern);

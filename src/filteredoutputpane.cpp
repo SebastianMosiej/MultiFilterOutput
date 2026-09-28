@@ -419,13 +419,23 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
     if (!m_tabWidget)
         return;
 
+    // A new run (or Re-run) may keep the previous run's output, greyed out above it, like
+    // Application Output (see keepsOldRunOutput()). Not on a switch: the tabs then show the
+    // run switched to, from its own history.
+    const bool keepOld = activeRunControl && !m_runTracker->lastActivationWasSwitch()
+                         && keepsOldRunOutput() && !m_allTab->document()->isEmpty();
+
     removePatternTabs();
     // Lines still queued belong to the run being replaced (or to the tab set being torn
     // down); they must not land in the fresh tabs.
     m_lineQueue->clear();
-    // reset(), not clear(): the inherited QPlainTextEdit::clear() leaves the match count,
-    // the source-block mapping and the formatter's carry-over buffer stale.
-    m_allTab->reset();
+    if (keepOld) {
+        m_allTab->grayOutOldContent();
+    } else {
+        // reset(), not clear(): the inherited QPlainTextEdit::clear() leaves the match count,
+        // the source-block mapping and the formatter's carry-over buffer stale.
+        m_allTab->reset();
+    }
     // No tab has any match stops now (the new pattern tabs start empty too).
     navigateStateChanged();
 
@@ -460,6 +470,21 @@ void FilteredOutputPane::rebuildTabs(RunControl *activeRunControl)
         m_runPatternIdsRun = activeRunControl;
     }
     createPatternTabs(project, runPatterns());
+    if (keepOld) {
+        // The old output into the new tabs, greyed out, then a line where this run begins.
+        replayAllIntoPatternTabs();
+        const QString separator = Tr::tr("---------- %1 ----------").arg(activeRunControl->displayName());
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        const int allLine
+            = m_allTab->appendLine(separator, Utils::NormalMessageFormat, -1, false, now);
+        m_allTab->markLastLineAsNotice();
+        for (const PatternTab &entry : std::as_const(m_patternTabs)) {
+            entry.tab->appendLine(separator, Utils::NormalMessageFormat, allLine, false, now);
+            entry.tab->markLastLineAsNotice();
+        }
+        m_router.resetContinuations();
+        navigateStateChanged();
+    }
 
     // What the run printed before becoming the active one (switched to, or before this pane
     // was first shown), filtered like live output and stamped with when it arrived.
@@ -869,7 +894,8 @@ bool FilteredOutputPane::routeToPatternTabs(
     Utils::OutputFormat format,
     int allLine,
     bool allLineIsLast,
-    qint64 timestamp)
+    qint64 timestamp,
+    bool fromOldRun)
 {
     const LineRouter::Result result = m_router.route(line, format, allLine);
     const bool highlightInAll = allLineIsLast && outputPaneSettings().highlightMatchesInAll();
@@ -884,9 +910,17 @@ bool FilteredOutputPane::routeToPatternTabs(
                 tab->appendLine(
                     shown->text, shown->format, contextLine, /*countsAsMatch=*/false,
                     shown->timestamp);
+                if (shown->isOld)
+                    tab->markLastLineAsOld();
             }
         }
-        tab->appendLine(line, format, allLine, route.countsAsMatch, timestamp);
+        // The previous run's output, kept greyed out: shown where it belongs, but it is not
+        // what the tab counts, stops at or highlights.
+        tab->appendLine(line, format, allLine, route.countsAsMatch && !fromOldRun, timestamp);
+        if (fromOldRun) {
+            tab->markLastLineAsOld();
+            continue;
+        }
         if (route.countsAsMatch) {
             tab->markLastLineAsMatch();
             matchedAnyPattern = true;
@@ -899,13 +933,55 @@ bool FilteredOutputPane::routeToPatternTabs(
     }
     if (result.unmatched) {
         if (OutputTabWidget *tab = unmatchedTab()) {
-            tab->appendLine(line, format, allLine, true, timestamp);
-            tab->markLastLineAsMatch();
+            tab->appendLine(line, format, allLine, !fromOldRun, timestamp);
+            if (fromOldRun)
+                tab->markLastLineAsOld();
+            else
+                tab->markLastLineAsMatch();
         }
     }
     for (const int index : result.newlyTooSlow)
         reportTooSlow(m_patternTabs.at(index));
     return matchedAnyPattern;
+}
+
+void FilteredOutputPane::replayAllIntoPatternTabs()
+{
+    // Replay what All still holds through the new patterns -- as shown in All, which is all
+    // that is kept: a line All cut short (see setMaxLineLength()) is matched only as far as
+    // shown. That text is already cut, so the pattern tabs mustn't cut it (and its note)
+    // again while replaying.
+    for (const PatternTab &entry : std::as_const(m_patternTabs))
+        entry.tab->setMaxLineLength(0);
+    m_allTab->clearMatchStops();
+    for (const OutputTabWidget::Line &line : m_allTab->lines()) {
+        if (line.isNotice) {
+            for (const PatternTab &entry : std::as_const(m_patternTabs)) {
+                entry.tab->appendLine(
+                    line.text, line.format, line.lineId, /*countsAsMatch=*/false, line.timestamp);
+                entry.tab->markLastLineAsNotice();
+                if (line.isOld)
+                    entry.tab->markLastLineAsOld();
+            }
+            m_router.resetContinuations();
+            continue;
+        }
+        if (routeToPatternTabs(
+                line.text, line.format, line.lineId, /*allLineIsLast=*/false, line.timestamp,
+                line.isOld))
+            m_allTab->markLineAsMatch(line.lineId);
+    }
+    for (const PatternTab &entry : std::as_const(m_patternTabs))
+        entry.tab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
+}
+
+bool FilteredOutputPane::keepsOldRunOutput() const
+{
+    // Application Output's AppOutputSettings aren't exported: its persisted key.
+    const bool applicationOutputClears
+        = Core::ICore::settings()->value("ProjectExplorer/Settings/CleanOldAppOutput", false).toBool();
+    return OutputPaneSettings::keepsOldRunOutput(
+        outputPaneSettings().oldRunOutput(), applicationOutputClears);
 }
 
 void FilteredOutputPane::refreshPatternTabs(bool force)
@@ -939,30 +1015,7 @@ void FilteredOutputPane::refreshPatternTabs(bool force)
 
     removePatternTabs();
     createPatternTabs(run->project(), patterns);
-
-    // Replay what All still holds through the new patterns -- as shown in All, which is all
-    // that is kept: a line All cut short (see setMaxLineLength()) is matched only as far as
-    // shown. That text is already cut, so the pattern tabs mustn't cut it (and its note)
-    // again while replaying.
-    for (const PatternTab &entry : std::as_const(m_patternTabs))
-        entry.tab->setMaxLineLength(0);
-    m_allTab->clearMatchStops();
-    for (const OutputTabWidget::Line &line : m_allTab->lines()) {
-        if (line.isNotice) {
-            for (const PatternTab &entry : std::as_const(m_patternTabs)) {
-                entry.tab->appendLine(
-                    line.text, line.format, line.lineId, /*countsAsMatch=*/false, line.timestamp);
-                entry.tab->markLastLineAsNotice();
-            }
-            m_router.resetContinuations();
-            continue;
-        }
-        if (routeToPatternTabs(
-                line.text, line.format, line.lineId, /*allLineIsLast=*/false, line.timestamp))
-            m_allTab->markLineAsMatch(line.lineId);
-    }
-    for (const PatternTab &entry : std::as_const(m_patternTabs))
-        entry.tab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
+    replayAllIntoPatternTabs();
 
     for (const PatternTab &entry : std::as_const(m_patternTabs)) {
         if (!currentPatternId.isEmpty() && entry.pattern.id == currentPatternId)
