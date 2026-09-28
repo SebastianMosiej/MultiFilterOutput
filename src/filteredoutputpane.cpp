@@ -789,12 +789,21 @@ bool FilteredOutputPane::routeToPatternTabs(
     bool allLineIsLast,
     qint64 timestamp)
 {
-    const LineRouter::Result result = m_router.route(line, format);
+    const LineRouter::Result result = m_router.route(line, format, allLine);
     const bool highlightInAll = allLineIsLast && outputPaneSettings().highlightMatchesInAll();
     bool matchedAnyPattern = false;
     for (const LineRouter::Route &route : result.routes) {
         const PatternTab &entry = m_patternTabs.at(route.patternIndex);
         OutputTabWidget *tab = entry.tab;
+        // Before-context: earlier lines, fetched back from All (unless it has dropped them
+        // for room meanwhile).
+        for (const int contextLine : route.contextBefore) {
+            if (const auto shown = m_allTab->line(contextLine)) {
+                tab->appendLine(
+                    shown->text, shown->format, contextLine, /*countsAsMatch=*/false,
+                    shown->timestamp);
+            }
+        }
         tab->appendLine(line, format, allLine, route.countsAsMatch, timestamp);
         if (route.countsAsMatch) {
             tab->markLastLineAsMatch();

@@ -12,6 +12,10 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   matches"), a tab color, and an order (drag-and-drop or **Move Up**/**Move
   Down**) that also determines each pattern's left-to-right tab position.
   Managed under **Tools > Options > MultiFilterOutput > Pattern Library**.
+- **Context lines** — like grep's `-B`/`-A`, a pattern can also show a few
+  lines before and after each match in its tab (not counted as matches;
+  overlapping context isn't repeated, and it never reaches across a
+  *lines were dropped* gap).
 - **Whole words only** — for plain-text patterns: `err` finds `err:` but not
   `error` or `stderr` (applies to the exclusion too; a regex uses `\b`).
 - **Exclusions within a pattern** — *Except lines matching* leaves lines out of

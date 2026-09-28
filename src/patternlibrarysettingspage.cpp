@@ -280,6 +280,15 @@ public:
             Tr::tr("Lines Qt Creator adds itself, such as \"Starting ...\" and \"... exited "
                    "with code 0\"."));
         m_continuationPatternEdit = new QLineEdit(Pattern().continuationPattern, this);
+        m_contextBeforeSpin = new QSpinBox(this);
+        m_contextAfterSpin = new QSpinBox(this);
+        for (QSpinBox *spin : {m_contextBeforeSpin, m_contextAfterSpin}) {
+            spin->setRange(0, Pattern::MaxContextLines);
+            spin->setToolTip(
+                Tr::tr("Also show this many lines before/after each match in the tab, like "
+                       "grep -B/-A. They don't count as matches, and overlapping context isn't "
+                       "repeated."));
+        }
         m_colorButton = new QPushButton(Tr::tr("Choose..."), this);
         m_errorLabel = new QLabel(this);
         m_errorLabel->setStyleSheet("color: red;");
@@ -316,6 +325,15 @@ public:
             m_continuationPatternEdit, &QLineEdit::textChanged, this,
             &PatternLibraryWidget::fieldEdited);
         connect(m_colorButton, &QPushButton::clicked, this, &PatternLibraryWidget::pickColor);
+        for (QSpinBox *spin : {m_contextBeforeSpin, m_contextAfterSpin})
+            connect(spin, &QSpinBox::valueChanged, this, &PatternLibraryWidget::fieldEdited);
+
+        auto *contextRow = new QHBoxLayout;
+        contextRow->addWidget(new QLabel(Tr::tr("before"), this));
+        contextRow->addWidget(m_contextBeforeSpin);
+        contextRow->addWidget(new QLabel(Tr::tr("after"), this));
+        contextRow->addWidget(m_contextAfterSpin);
+        contextRow->addStretch();
 
         auto *continuationCheckRow = new QHBoxLayout;
         continuationCheckRow->addWidget(m_groupContinuationCheck);
@@ -340,6 +358,7 @@ public:
         form->addRow(m_defaultCheck);
         form->addRow(continuationCheckRow);
         form->addRow(Tr::tr("Continuation line starts with:"), m_continuationPatternEdit);
+        form->addRow(Tr::tr("Context lines:"), contextRow);
         form->addRow(Tr::tr("Tab color:"), m_colorButton);
         form->addRow(m_errorLabel);
 
@@ -452,6 +471,8 @@ private:
             check->setEnabled(enabled);
         m_groupContinuationCheck->setEnabled(enabled);
         m_colorButton->setEnabled(enabled);
+        m_contextBeforeSpin->setEnabled(enabled);
+        m_contextAfterSpin->setEnabled(enabled);
         m_removeButton->setEnabled(enabled);
         updateContinuationFieldEnabled();
     }
@@ -557,6 +578,8 @@ private:
                 check->setChecked(true);
             m_groupContinuationCheck->setChecked(false);
             m_continuationPatternEdit->setText(Pattern().continuationPattern);
+            m_contextBeforeSpin->setValue(0);
+            m_contextAfterSpin->setValue(0);
             m_currentColor = QColor();
             updateColorButton();
             m_errorLabel->clear();
@@ -587,6 +610,8 @@ private:
         m_messagesCheck->setChecked(pattern->channels.testFlag(Pattern::MessagesChannel));
         m_groupContinuationCheck->setChecked(pattern->groupContinuationLines);
         m_continuationPatternEdit->setText(pattern->continuationPattern);
+        m_contextBeforeSpin->setValue(pattern->contextBefore);
+        m_contextAfterSpin->setValue(pattern->contextAfter);
         updateColorButton();
         m_errorLabel->clear();
         m_updatingFields = false;
@@ -672,6 +697,8 @@ private:
         updated.channels = channels;
         updated.groupContinuationLines = m_groupContinuationCheck->isChecked();
         updated.continuationPattern = m_continuationPatternEdit->text();
+        updated.contextBefore = m_contextBeforeSpin->value();
+        updated.contextAfter = m_contextAfterSpin->value();
         updated.color = m_currentColor;
 
         for (Pattern &existing : m_workingPatterns) {
@@ -700,6 +727,8 @@ private:
     QCheckBox *m_stdErrCheck;
     QCheckBox *m_messagesCheck;
     QLineEdit *m_continuationPatternEdit;
+    QSpinBox *m_contextBeforeSpin;
+    QSpinBox *m_contextAfterSpin;
     QPushButton *m_colorButton;
     QLabel *m_errorLabel;
     QPushButton *m_removeButton;
