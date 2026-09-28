@@ -48,12 +48,39 @@ const QRegularExpression &compiledRegex(const QString &patternText, bool caseSen
     return cache.get(patternText, caseSensitive);
 }
 
+// Plain text searched for as a whole word (see Pattern::wholeWord) goes through a regex: the
+// escaped text, which must not continue a word at an edge where it starts or ends with a word
+// character. An edge that is punctuation needs nothing: "ERROR:" finds "ERROR:x" but not
+// "XERROR:". (Plain \b...\b would instead demand a word character there.) (*UCP) makes \w
+// Unicode-aware, so non-ASCII letters count as word characters too.
+bool searchesWholeWord(const Pattern &pattern, const QString &text)
+{
+    return !pattern.isRegex && pattern.wholeWord && !text.isEmpty();
+}
+
+bool isWordCharacter(QChar c)
+{
+    return c.isLetterOrNumber() || c.isMark() || c == u'_';
+}
+
+QString wholeWordRegex(const QString &text)
+{
+    QString regex = QStringLiteral("(*UCP)");
+    if (isWordCharacter(text.front()))
+        regex += QStringLiteral("(?<!\\w)");
+    regex += QRegularExpression::escape(text);
+    if (isWordCharacter(text.back()))
+        regex += QStringLiteral("(?!\\w)");
+    return regex;
+}
+
 // Whether `text` occurs in `line`, read the way `pattern` reads its texts (regex or plain,
-// its case sensitivity); nullopt for an invalid regex.
+// whole word, its case sensitivity); nullopt for an invalid regex.
 std::optional<bool> containsText(const Pattern &pattern, const QString &text, const QString &line)
 {
-    if (pattern.isRegex) {
-        const QRegularExpression &re = compiledRegex(text, pattern.caseSensitive);
+    if (pattern.isRegex || searchesWholeWord(pattern, text)) {
+        const QRegularExpression &re = compiledRegex(
+            pattern.isRegex ? text : wholeWordRegex(text), pattern.caseSensitive);
         if (!re.isValid())
             return std::nullopt;
         return re.match(line).hasMatch();
@@ -115,8 +142,10 @@ QList<MatchSpan> matchSpans(const Pattern &pattern, const QString &line)
     QList<MatchSpan> spans;
     if (pattern.invert || pattern.patternText.isEmpty())
         return spans;
-    if (pattern.isRegex) {
-        const QRegularExpression &re = compiledRegex(pattern.patternText, pattern.caseSensitive);
+    if (pattern.isRegex || searchesWholeWord(pattern, pattern.patternText)) {
+        const QRegularExpression &re = compiledRegex(
+            pattern.isRegex ? pattern.patternText : wholeWordRegex(pattern.patternText),
+            pattern.caseSensitive);
         if (!re.isValid())
             return spans;
         QRegularExpressionMatchIterator it = re.globalMatch(line);

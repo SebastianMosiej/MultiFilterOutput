@@ -23,6 +23,10 @@ public:
     QString excludeText;
     bool isRegex = true;
     bool caseSensitive = false;
+    // Plain text only (a regex says so itself, with \b): the text -- and excludeText -- must
+    // not touch a word character on either side, so "err" finds "err:" but not "error" or
+    // "stderr". Ignored for regex patterns and for empty text.
+    bool wholeWord = false;
     bool invert = false;
     // Invalid (the default) means "no tint" -- the tab keeps the pane's normal text color;
     // see FilteredOutputPane::updateTabLabel().

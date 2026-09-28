@@ -18,6 +18,7 @@ private slots:
     void channelOfSortsFormats();
     void looksAtOnlyItsChannels();
     void excludeTextDefaultsEmptyAndRoundTrips();
+    void wholeWordDefaultsOffAndRoundTrips();
 };
 
 void tst_Pattern::roundTripsThroughMap()
@@ -131,6 +132,16 @@ void tst_Pattern::excludeTextDefaultsEmptyAndRoundTrips()
     Pattern p;
     p.excludeText = "known flaky";
     QCOMPARE(Pattern::fromMap(p.toMap()).excludeText, QStringLiteral("known flaky"));
+}
+
+void tst_Pattern::wholeWordDefaultsOffAndRoundTrips()
+{
+    QVERIFY(!Pattern().wholeWord);
+    QVERIFY(!Pattern::fromMap({{"id", "x"}}).wholeWord);
+
+    Pattern p;
+    p.wholeWord = true;
+    QVERIFY(Pattern::fromMap(p.toMap()).wholeWord);
 }
 
 #include "tst_pattern.moc"

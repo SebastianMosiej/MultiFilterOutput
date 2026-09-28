@@ -38,6 +38,7 @@ QVariantMap Pattern::toMap() const
         {"excludeText", excludeText},
         {"isRegex", isRegex},
         {"caseSensitive", caseSensitive},
+        {"wholeWord", wholeWord},
         {"invert", invert},
         {"color", color},
         {"groupContinuationLines", groupContinuationLines},
@@ -56,6 +57,7 @@ Pattern Pattern::fromMap(const QVariantMap &map)
     p.excludeText = map.value("excludeText").toString();
     p.isRegex = map.value("isRegex", true).toBool();
     p.caseSensitive = map.value("caseSensitive", false).toBool();
+    p.wholeWord = map.value("wholeWord", false).toBool();
     p.invert = map.value("invert", false).toBool();
     // Taken as is -- including gray. Migrating the legacy "gray means no tint" sentinel is
     // PatternLibrary::load()'s job, and only for settings from before the schema version.

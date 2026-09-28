@@ -14,6 +14,12 @@ class tst_LineMatcher : public QObject
     Q_OBJECT
 
 private slots:
+    void wholeWordMatchesOnlyWholeWords();
+    void wholeWordAllowsPunctuationAtTheEdges();
+    void wholeWordKnowsNonAsciiLetters();
+    void wholeWordIsIgnoredForRegexAndEmptyText();
+    void wholeWordAppliesToExclude();
+    void wholeWordSpansSkipPartialWords();
     void excludeDropsOtherwiseMatchingLines();
     void excludeFollowsRegexAndCaseSettings();
     void excludeAppliesAfterInvert();
@@ -384,6 +390,73 @@ void tst_LineMatcher::invalidExcludeRegexExcludesNothing()
     p.patternText = "ERROR";
     p.excludeText = "([unterminated";
     QVERIFY(lineMatches(p, "ERROR ([unterminated"));
+}
+
+static Pattern plainWord(const QString &text)
+{
+    Pattern p;
+    p.isRegex = false;
+    p.wholeWord = true;
+    p.patternText = text;
+    return p;
+}
+
+void tst_LineMatcher::wholeWordMatchesOnlyWholeWords()
+{
+    const Pattern p = plainWord("err");
+    QVERIFY(lineMatches(p, "err: disk full"));
+    QVERIFY(lineMatches(p, "an ERR.")); // case-insensitive as usual
+    QVERIFY(lineMatches(p, "err"));
+    QVERIFY(!lineMatches(p, "error"));
+    QVERIFY(!lineMatches(p, "stderr"));
+    QVERIFY(!lineMatches(p, "err_code")); // '_' is a word character
+    QVERIFY(lineMatches(p, "error, then err")); // any whole occurrence will do
+}
+
+// Not \b...\b, which would need a word character right inside each edge: "ERROR:" must still
+// find "ERROR: x".
+void tst_LineMatcher::wholeWordAllowsPunctuationAtTheEdges()
+{
+    const Pattern p = plainWord("ERROR:");
+    QVERIFY(lineMatches(p, "12:00 ERROR: x"));
+    QVERIFY(lineMatches(p, "ERROR:x")); // after ':' anything may follow
+    QVERIFY(!lineMatches(p, "XERROR: x"));
+    QVERIFY(lineMatches(plainWord("-v"), "run -v"));
+    QVERIFY(!lineMatches(plainWord("-v"), "run -verbose"));
+
+    // Still plain text: no regex meaning.
+    QVERIFY(!lineMatches(plainWord("a.b"), "axb"));
+    QVERIFY(lineMatches(plainWord("a.b"), "see a.b here"));
+}
+
+void tst_LineMatcher::wholeWordKnowsNonAsciiLetters()
+{
+    const Pattern p = plainWord(QStringLiteral("\u00f3d\u017a")); // "ódź"
+    QVERIFY(!lineMatches(p, QStringLiteral("\u0142\u00f3d\u017a"))); // "łódź"
+    QVERIFY(lineMatches(p, QStringLiteral("w \u00f3d\u017a, tak"))); // "w ódź, tak"
+}
+
+void tst_LineMatcher::wholeWordIsIgnoredForRegexAndEmptyText()
+{
+    Pattern regex = plainWord("err");
+    regex.isRegex = true;
+    QVERIFY(lineMatches(regex, "error"));
+
+    QVERIFY(lineMatches(plainWord(""), "anything"));
+}
+
+void tst_LineMatcher::wholeWordAppliesToExclude()
+{
+    Pattern p = plainWord("ERROR");
+    p.excludeText = "flaky";
+    QVERIFY(!lineMatches(p, "ERROR flaky test"));
+    QVERIFY(lineMatches(p, "ERROR flakyness")); // not the whole word "flaky"
+}
+
+void tst_LineMatcher::wholeWordSpansSkipPartialWords()
+{
+    using Spans = QList<MatchSpan>;
+    QCOMPARE(matchSpans(plainWord("err"), "err error stderr ERR"), (Spans{{0, 3}, {17, 3}}));
 }
 
 QTEST_GUILESS_MAIN(tst_LineMatcher)
