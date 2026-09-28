@@ -74,8 +74,13 @@ private:
     // returns whether any pattern matched it.
     // With allLineIsLast, All's newest line is this very line, so matches may be highlighted
     // there too (not so when replaying All's old lines, see refreshPatternTabs()).
+    // `timestamp`: when the line arrived (see LineQueue), for the timestamp gutter.
     bool routeToPatternTabs(
-        const QString &line, Utils::OutputFormat format, int allLine, bool allLineIsLast);
+        const QString &line,
+        Utils::OutputFormat format,
+        int allLine,
+        bool allLineIsLast,
+        qint64 timestamp);
     // The background a pattern's matched text gets: its tab color, faint enough to keep the
     // text readable, or the theme's highlight background if it has none.
     static QColor highlightColor(const Pattern &pattern);
@@ -98,7 +103,7 @@ private:
     void onLineReceived(const QString &line, Utils::OutputFormat format);
     // Appends one line to "All" and to every pattern tab it belongs in; driven by
     // m_lineQueue, never directly from onLineReceived().
-    void processLine(const QString &line, Utils::OutputFormat format);
+    void processLine(const QString &line, Utils::OutputFormat format, qint64 receivedAt);
     void onJumpRequested(int sourceLineId);
     void updateTabLabel(const Pattern &pattern, OutputTabWidget *tab, int count);
     // Matches the tab widget's pane background to OutputPaneTabBar's own painted background
@@ -143,6 +148,7 @@ private:
     LineRouter m_router;
     QLabel *m_runLabel = nullptr;
     QToolButton *m_wrapButton = nullptr;
+    QToolButton *m_timestampsButton = nullptr;
     QToolButton *m_copyButton = nullptr;
     QToolButton *m_saveButton = nullptr;
     QToolButton *m_saveFilterButton = nullptr;

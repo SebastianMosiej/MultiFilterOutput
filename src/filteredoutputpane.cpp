@@ -26,6 +26,7 @@
 #include <utils/theme/theme.h>
 
 #include <QClipboard>
+#include <QDateTime>
 #include <QGuiApplication>
 #include <QInputDialog>
 #include <QLabel>
@@ -65,7 +66,9 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     settings->endGroup();
 
     m_lineQueue = new LineQueue(
-        [this](const QString &line, Utils::OutputFormat format, qint64) { processLine(line, format); },
+        [this](const QString &line, Utils::OutputFormat format, qint64 receivedAt) {
+            processLine(line, format, receivedAt);
+        },
         std::chrono::milliseconds(10),
         this);
     m_lineQueue->setOverflowHandling(
@@ -86,6 +89,14 @@ FilteredOutputPane::FilteredOutputPane(RunTracker *runTracker, QObject *parent)
     });
 
     // Word wrap and zoom from the toolbar (and the zoom shortcuts), for every tab.
+    connect(&outputPaneSettings(), &OutputPaneSettings::showTimestampsChanged, this, [this](bool enabled) {
+        if (m_timestampsButton)
+            m_timestampsButton->setChecked(enabled);
+        if (m_allTab)
+            m_allTab->setShowTimestamps(enabled);
+        for (const PatternTab &entry : std::as_const(m_patternTabs))
+            entry.tab->setShowTimestamps(enabled);
+    });
     connect(&outputPaneSettings(), &OutputPaneSettings::wordWrapChanged, this, [this](bool enabled) {
         if (m_wrapButton)
             m_wrapButton->setChecked(enabled);
@@ -148,6 +159,7 @@ QWidget *FilteredOutputPane::outputWidget(QWidget *parent)
         m_allTab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
         applyWordWrap(m_allTab);
         m_allTab->setMaxCharacterCount(maxCharactersPerTab());
+        m_allTab->setShowTimestamps(outputPaneSettings().showTimestamps());
         connect(m_allTab, &OutputTabWidget::fontZoomChanged, this, &FilteredOutputPane::onTabZoomChanged);
         m_tabWidget->addTab(m_allTab, Tr::tr("All"));
 
@@ -168,6 +180,15 @@ QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
         self->updateRunLabel();
     }
     if (!m_wrapButton) {
+        self->m_timestampsButton = new QToolButton;
+        m_timestampsButton->setText(Tr::tr("Time"));
+        m_timestampsButton->setToolTip(Tr::tr("Show when each line arrived, in all tabs"));
+        m_timestampsButton->setCheckable(true);
+        m_timestampsButton->setChecked(outputPaneSettings().showTimestamps());
+        connect(m_timestampsButton, &QToolButton::toggled, self, [](bool checked) {
+            outputPaneSettings().setShowTimestamps(checked);
+        });
+
         self->m_wrapButton = new QToolButton;
         m_wrapButton->setText(Tr::tr("Wrap"));
         m_wrapButton->setToolTip(Tr::tr("Word-wrap long lines in all tabs"));
@@ -208,7 +229,8 @@ QList<QWidget *> FilteredOutputPane::toolBarWidgets() const
     }
     // IOutputPane's own widgets: the filter box (see updateFilter()) and the zoom buttons.
     return IOutputPane::toolBarWidgets() << m_patternsButton << m_saveFilterButton
-                                         << m_wrapButton << m_copyButton << m_saveButton
+                                         << m_timestampsButton << m_wrapButton << m_copyButton
+                                         << m_saveButton
                                          << m_runLabel;
 }
 
@@ -553,6 +575,7 @@ void FilteredOutputPane::addPatternTab(Project *project, const Pattern &pattern,
     tab->setMaxLineLength(outputPaneSettings().maxDisplayedLineLength());
     applyWordWrap(tab);
     tab->setMaxCharacterCount(maxCharactersPerTab());
+    tab->setShowTimestamps(outputPaneSettings().showTimestamps());
     connect(tab, &OutputTabWidget::matchCountChanged, this, [this, pattern, tab](int count) {
         updateTabLabel(pattern, tab, count);
     });
@@ -646,24 +669,29 @@ void FilteredOutputPane::onLineReceived(const QString &line, Utils::OutputFormat
     m_lineQueue->enqueue(line, format);
 }
 
-void FilteredOutputPane::processLine(const QString &line, Utils::OutputFormat format)
+void FilteredOutputPane::processLine(
+    const QString &line, Utils::OutputFormat format, qint64 receivedAt)
 {
     if (!m_allTab)
         return;
 
     // The "All" tab is the jump target, so its line id for this line is what every matching
     // pattern tab must record -- not an id of each tab's own.
-    const int allLine = m_allTab->appendLine(line, format);
+    const int allLine = m_allTab->appendLine(line, format, -1, true, receivedAt);
 
     const bool couldNavigate = canNext();
-    if (routeToPatternTabs(line, format, allLine, /*allLineIsLast=*/true))
+    if (routeToPatternTabs(line, format, allLine, /*allLineIsLast=*/true, receivedAt))
         m_allTab->markLastLineAsMatch();
     if (canNext() != couldNavigate)
         navigateStateChanged();
 }
 
 bool FilteredOutputPane::routeToPatternTabs(
-    const QString &line, Utils::OutputFormat format, int allLine, bool allLineIsLast)
+    const QString &line,
+    Utils::OutputFormat format,
+    int allLine,
+    bool allLineIsLast,
+    qint64 timestamp)
 {
     const LineRouter::Result result = m_router.route(line);
     const bool highlightInAll = allLineIsLast && outputPaneSettings().highlightMatchesInAll();
@@ -671,7 +699,7 @@ bool FilteredOutputPane::routeToPatternTabs(
     for (const LineRouter::Route &route : result.routes) {
         const PatternTab &entry = m_patternTabs.at(route.patternIndex);
         OutputTabWidget *tab = entry.tab;
-        tab->appendLine(line, format, allLine, route.countsAsMatch);
+        tab->appendLine(line, format, allLine, route.countsAsMatch, timestamp);
         if (route.countsAsMatch) {
             tab->markLastLineAsMatch();
             matchedAnyPattern = true;
@@ -684,7 +712,7 @@ bool FilteredOutputPane::routeToPatternTabs(
     }
     if (result.unmatched) {
         if (OutputTabWidget *tab = unmatchedTab()) {
-            tab->appendLine(line, format, allLine);
+            tab->appendLine(line, format, allLine, true, timestamp);
             tab->markLastLineAsMatch();
         }
     }
@@ -735,13 +763,15 @@ void FilteredOutputPane::refreshPatternTabs(bool force)
     for (const OutputTabWidget::Line &line : m_allTab->lines()) {
         if (line.isNotice) {
             for (const PatternTab &entry : std::as_const(m_patternTabs)) {
-                entry.tab->appendLine(line.text, line.format, line.lineId, /*countsAsMatch=*/false);
+                entry.tab->appendLine(
+                    line.text, line.format, line.lineId, /*countsAsMatch=*/false, line.timestamp);
                 entry.tab->markLastLineAsNotice();
             }
             m_router.resetContinuations();
             continue;
         }
-        if (routeToPatternTabs(line.text, line.format, line.lineId, /*allLineIsLast=*/false))
+        if (routeToPatternTabs(
+                line.text, line.format, line.lineId, /*allLineIsLast=*/false, line.timestamp))
             m_allTab->markLineAsMatch(line.lineId);
     }
     for (const PatternTab &entry : std::as_const(m_patternTabs))
@@ -764,10 +794,11 @@ void FilteredOutputPane::reportDiscarded(int lines)
     const QString notice = Tr::tr("[MultiFilterOutput: %1 lines of output were dropped here -- "
                                   "they arrived faster than they could be filtered.]")
                                .arg(lines);
-    const int allLine = m_allTab->appendLine(notice, Utils::ErrorMessageFormat);
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const int allLine = m_allTab->appendLine(notice, Utils::ErrorMessageFormat, -1, false, now);
     m_allTab->markLastLineAsNotice();
     for (const PatternTab &entry : std::as_const(m_patternTabs)) {
-        entry.tab->appendLine(notice, Utils::ErrorMessageFormat, allLine, /*countsAsMatch=*/false);
+        entry.tab->appendLine(notice, Utils::ErrorMessageFormat, allLine, /*countsAsMatch=*/false, now);
         entry.tab->markLastLineAsNotice();
     }
     // A continuation run can't be continued across a gap: what follows didn't follow the match.

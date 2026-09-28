@@ -165,6 +165,26 @@ void OutputPaneSettings::setHighlightMatchesInAll(bool enabled)
     settings->sync();
 }
 
+bool OutputPaneSettings::showTimestamps() const
+{
+    return m_showTimestamps;
+}
+
+void OutputPaneSettings::setShowTimestamps(bool enabled)
+{
+    if (m_showTimestamps == enabled)
+        return;
+    m_showTimestamps = enabled;
+
+    Utils::QtcSettings *settings = Core::ICore::settings();
+    settings->beginGroup(Constants::SETTINGS_GROUP);
+    settings->setValue(Constants::SHOW_TIMESTAMPS_KEY, enabled);
+    settings->endGroup();
+    settings->sync();
+
+    emit showTimestampsChanged(m_showTimestamps);
+}
+
 void OutputPaneSettings::load()
 {
     Utils::QtcSettings *settings = Core::ICore::settings();
@@ -177,6 +197,7 @@ void OutputPaneSettings::load()
     m_wordWrap = settings->value(Constants::WORD_WRAP_KEY, true).toBool();
     m_showUnmatchedTab = settings->value(Constants::SHOW_UNMATCHED_TAB_KEY, true).toBool();
     m_highlightMatchesInAll = settings->value(Constants::HIGHLIGHT_IN_ALL_KEY, false).toBool();
+    m_showTimestamps = settings->value(Constants::SHOW_TIMESTAMPS_KEY, false).toBool();
     m_maxCharactersPerTab = qMax<qsizetype>(
         0, settings->value(Constants::MAX_CHARACTERS_PER_TAB_KEY, 0).toLongLong());
     m_maxDisplayedLineLength = qMax(

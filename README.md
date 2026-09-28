@@ -39,6 +39,10 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   buttons, or Ctrl++ / Ctrl+- / Ctrl+0; every tab in the pane (the **All**
   tab and every pattern tab) follows to the same size, across new runs and
   across Qt Creator restarts.
+- **Timestamps** — **Time** in the toolbar shows when each line arrived
+  (hh:mm:ss.zzz) in a margin beside every tab's text. The times aren't part
+  of the text, so Find, Copy, Save and filtering are unaffected. Off by
+  default; remembered.
 - **Toolbar** — besides zoom and Qt Creator's usual *Clear*: **Wrap**
   toggles word-wrapping in all tabs (on by default, remembered), **Copy**
   puts the current tab's text on the clipboard, and **Save** writes it to

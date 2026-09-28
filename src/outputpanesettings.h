@@ -67,6 +67,11 @@ public:
     bool highlightMatchesInAll() const;
     void setHighlightMatchesInAll(bool enabled);
 
+    // Whether every tab shows when each line arrived, in a gutter left of the text (see
+    // OutputTabWidget::setShowTimestamps()); toggled from the pane's toolbar. Off by default.
+    bool showTimestamps() const;
+    void setShowTimestamps(bool enabled);
+
     void load();
 
 signals:
@@ -75,6 +80,7 @@ signals:
     void wordWrapChanged(bool enabled);
     void showUnmatchedTabChanged(bool enabled);
     void maxCharactersPerTabChanged(qsizetype characters);
+    void showTimestampsChanged(bool enabled);
 
 private:
     OutputPanePlacement m_placement = OutputPanePlacement::NextToApplicationOutput;
@@ -85,6 +91,7 @@ private:
     bool m_showUnmatchedTab = true;
     qsizetype m_maxCharactersPerTab = 0;
     bool m_highlightMatchesInAll = false;
+    bool m_showTimestamps = false;
 };
 
 MULTIFILTEROUTPUT_EXPORT OutputPaneSettings &outputPaneSettings();
