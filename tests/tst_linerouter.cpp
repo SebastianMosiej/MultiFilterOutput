@@ -48,6 +48,8 @@ private slots:
     void continuationRunsAreIndependentPerPattern();
     void resetContinuationsEndsRun();
     void slowPatternIsReportedOnceThenSkipped();
+    void unmatchedMeansNoNonInvertedPatternTookIt();
+    void continuationLinesAreNotUnmatched();
 };
 
 void tst_LineRouter::routesLinesToEveryMatchingPattern()
@@ -155,6 +157,29 @@ void tst_LineRouter::slowPatternIsReportedOnceThenSkipped()
     const LineRouter::Result after = router.route(line);
     QCOMPARE(after.routes, (Routes{{1, true}}));
     QVERIFY(after.newlyTooSlow.isEmpty());
+}
+
+// The Unmatched tab gets what no pattern accounts for. Inverted patterns ("everything but
+// DEBUG") take nearly every line by design, so they don't count as accounting for one.
+void tst_LineRouter::unmatchedMeansNoNonInvertedPatternTookIt()
+{
+    Pattern notDebug = regexPattern("DEBUG");
+    notDebug.invert = true;
+    LineRouter router({regexPattern("ERROR"), notDebug});
+
+    QVERIFY(!router.route("ERROR boom").unmatched);
+    QVERIFY(router.route("INFO started").unmatched); // only the inverted pattern took it
+    QVERIFY(router.route("DEBUG noise").unmatched);  // nothing took it
+}
+
+// A continuation line belongs to the match it follows, so it isn't unmatched.
+void tst_LineRouter::continuationLinesAreNotUnmatched()
+{
+    LineRouter router({grouping(regexPattern("ERROR"))});
+
+    router.route("ERROR boom");
+    QVERIFY(!router.route("  at foo()").unmatched);
+    QVERIFY(router.route("next line").unmatched);
 }
 
 QTEST_GUILESS_MAIN(tst_LineRouter)

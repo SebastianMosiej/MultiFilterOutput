@@ -32,6 +32,10 @@ public:
         // Patterns whose breaker tripped while routing this line -- each is reported here
         // exactly once, and skipped from then on.
         QList<int> newlyTooSlow;
+        // No non-inverted pattern took the line (as a match or a continuation line): it
+        // belongs in the Unmatched tab. Inverted patterns don't count -- they take nearly
+        // everything by design.
+        bool unmatched = true;
     };
 
     explicit LineRouter(

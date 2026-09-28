@@ -19,6 +19,12 @@ LineRouter::Result LineRouter::route(const QString &line)
         if (m_states.at(i).breaker.isTripped())
             result.newlyTooSlow.append(i);
     }
+    for (const Route &route : std::as_const(result.routes)) {
+        if (!m_states.at(route.patternIndex).pattern.invert) {
+            result.unmatched = false;
+            break;
+        }
+    }
     return result;
 }
 
