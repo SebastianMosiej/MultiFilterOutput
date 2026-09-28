@@ -6,6 +6,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
+#include <QUuid>
 
 #include <algorithm>
 
@@ -41,7 +43,7 @@ QByteArray exportPatterns(const QList<Pattern> &patterns)
     return QJsonDocument(root).toJson(QJsonDocument::Indented);
 }
 
-ParsedPatterns parsePatterns(const QByteArray &json)
+ParsedPatterns parsePatterns(const QByteArray &json, const QString &idSeed)
 {
     ParsedPatterns result;
     QJsonParseError parseError;
@@ -84,6 +86,24 @@ ParsedPatterns parsePatterns(const QByteArray &json)
         if (color.isValid())
             map.insert("color", color);
         result.patterns.append(Pattern::fromMap(map));
+    }
+    // Stable ids for a file that is read again and again (see the header).
+    if (!idSeed.isEmpty()) {
+        static const QUuid ns("{6f1c2a57-0b7e-4c1e-9d0a-5a3f3e8b2c11}");
+        QSet<QString> seen;
+        for (qsizetype i = 0; i < result.patterns.size(); ++i) {
+            Pattern &p = result.patterns[i];
+            if (p.id.isEmpty() || seen.contains(p.id)) {
+                p.id = QUuid::createUuidV5(ns, idSeed + u'\n' + QString::number(i))
+                           .toString(QUuid::WithoutBraces);
+                result.warnings << Tr::tr("Pattern \"%1\" has no id of its own; it was given one "
+                                          "from its place in the file, which changes if entries "
+                                          "are added or moved above it. Give it an \"id\" so run "
+                                          "configurations keep finding it.")
+                                       .arg(p.name);
+            }
+            seen.insert(p.id);
+        }
     }
     // What the file may hold that the editor never would: missing or shared ids (repaired),
     // invalid expressions (reported).

@@ -50,6 +50,10 @@ public:
     // the file (and .qtcreator) if needed. Refuses to overwrite a file it can't read.
     Utils::Result<> share(const Utils::FilePath &projectDirectory, const QList<Pattern> &patterns);
 
+    // Forgets every project and stops watching -- from the plugin's shutdown, while Qt is still
+    // up (this lives in a function-local static, destroyed only after QApplication).
+    void shutdown();
+
 signals:
     void patternsChanged(const Utils::FilePath &projectDirectory);
     void problemsFound(const Utils::FilePath &patternFile, const QStringList &problems);
@@ -59,7 +63,11 @@ private:
     {
         int users = 0;
         QList<Pattern> patterns;
+        // What was last reported, so a file re-read on every project save (Qt Creator keeps
+        // the .user file in .qtcreator too) doesn't repeat the same problems each time.
+        QStringList reportedProblems;
     };
+    void report(const Utils::FilePath &projectDirectory, const QStringList &problems);
     void watch(const Utils::FilePath &projectDirectory);
     void unwatch(const Utils::FilePath &projectDirectory);
     void handleChange(const Utils::FilePath &path);

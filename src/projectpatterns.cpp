@@ -80,21 +80,23 @@ void ProjectPatterns::reload(const Utils::FilePath &projectDirectory)
 
     const Utils::FilePath file = patternFile(projectDirectory);
     QList<Pattern> patterns;
+    QStringList problems;
     if (file.exists()) {
         const Utils::Result<QByteArray> contents = file.fileContents();
         if (!contents) {
-            emit problemsFound(file, {contents.error()});
+            report(projectDirectory, {contents.error()});
             return;
         }
-        const ParsedPatterns parsed = parsePatterns(*contents);
+        // Seeded with the file's path: an entry without an id gets the same one every time.
+        const ParsedPatterns parsed = parsePatterns(*contents, file.path());
         if (!parsed.error.isEmpty()) {
-            emit problemsFound(file, {parsed.error});
+            report(projectDirectory, {parsed.error});
             return;
         }
-        if (!parsed.warnings.isEmpty())
-            emit problemsFound(file, parsed.warnings);
+        problems = parsed.warnings;
         patterns = parsed.patterns;
     }
+    report(projectDirectory, problems);
     if (samePatterns(patterns, it->patterns))
         return;
     it->patterns = patterns;
@@ -136,11 +138,30 @@ Utils::Result<> ProjectPatterns::share(
     return Utils::ResultOk;
 }
 
+void ProjectPatterns::report(const Utils::FilePath &projectDirectory, const QStringList &problems)
+{
+    const auto it = m_projects.find(projectDirectory);
+    if (it == m_projects.end() || it->reportedProblems == problems)
+        return;
+    it->reportedProblems = problems;
+    if (!problems.isEmpty())
+        emit problemsFound(patternFile(projectDirectory), problems);
+}
+
+void ProjectPatterns::shutdown()
+{
+    m_projects.clear();
+    delete m_watcher;
+    m_watcher = nullptr;
+}
+
 // The file itself when it exists, and the directory it would appear in (or, before there is
 // a .qtcreator, the project directory) -- so a file created, replaced or deleted is noticed
 // too: editors and git often write a new file rather than change the old one.
 void ProjectPatterns::watch(const Utils::FilePath &projectDirectory)
 {
+    if (!m_watcher) // after shutdown()
+        return;
     const Utils::FilePath file = patternFile(projectDirectory);
     if (file.exists() && !m_watcher->watchesFile(file))
         m_watcher->addFile(file, Utils::FileSystemWatcher::WatchAllChanges);
@@ -151,6 +172,8 @@ void ProjectPatterns::watch(const Utils::FilePath &projectDirectory)
 
 void ProjectPatterns::unwatch(const Utils::FilePath &projectDirectory)
 {
+    if (!m_watcher)
+        return;
     const Utils::FilePath file = patternFile(projectDirectory);
     for (const Utils::FilePath &path : {file, file.parentDir(), projectDirectory}) {
         if (m_watcher->watchesFile(path))

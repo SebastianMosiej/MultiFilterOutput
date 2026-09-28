@@ -28,7 +28,12 @@ struct ParsedPatterns
     // from a newer version).
     QStringList warnings;
 };
-MULTIFILTEROUTPUT_EXPORT ParsedPatterns parsePatterns(const QByteArray &json);
+// With an `idSeed` (a project's pattern file: see ProjectPatterns), a pattern without an id
+// of its own -- or sharing one -- is given one derived from the seed and its place in the
+// file, the same every time the file is read, rather than a random one: run configurations
+// select patterns by id, and the file is read again whenever anything near it changes.
+MULTIFILTEROUTPUT_EXPORT ParsedPatterns parsePatterns(
+    const QByteArray &json, const QString &idSeed = {});
 
 // Importing merges by id. A pattern whose id the library doesn't have is added; one it has
 // with identical contents is skipped; one it has with different contents is a conflict,

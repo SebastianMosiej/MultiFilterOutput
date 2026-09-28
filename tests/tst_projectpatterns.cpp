@@ -25,6 +25,9 @@ private slots:
     void shareReplacesByIdAndKeepsTheRest();
     void shareRefusesToOverwriteAnUnreadableFile();
     void combinedPatternsLetTheProjectWin();
+    void entriesWithoutIdsKeepTheirIds();
+    void problemsAreReportedOncePerChange();
+    void shutdownStopsWatching();
 };
 
 static Pattern pattern(const QString &id, const QString &name, const QString &text = "x")
@@ -214,6 +217,66 @@ void tst_ProjectPatterns::combinedPatternsLetTheProjectWin()
         names(combinedPatterns(library, project)),
         (QStringList{"A", "B shared", "C", "Team"}));
     QCOMPARE(names(combinedPatterns(library, {})), (QStringList{"A", "B mine", "C"}));
+}
+
+static const QByteArray idless = R"({"format": "MultiFilterOutput.PatternLibrary", "version": 1,
+    "patterns": [{"name": "Hand-written", "patternText": "x"}]})";
+
+// Qt Creator writes the project's .user file into .qtcreator too, so the file is re-read on
+// every project save: an id made up afresh each time would lose every run configuration's
+// selection of the pattern.
+void tst_ProjectPatterns::entriesWithoutIdsKeepTheirIds()
+{
+    QTemporaryDir dir;
+    const FilePath project = FilePath::fromString(dir.path());
+    writeFile(project, idless);
+    ProjectPatterns store;
+    store.addProject(project);
+    const QString id = store.patterns(project).first().id;
+    QSignalSpy changed(&store, &ProjectPatterns::patternsChanged);
+
+    store.reload(project);
+    QCOMPARE(changed.size(), 0);
+    ProjectPatterns nextSession;
+    nextSession.addProject(project);
+    QCOMPARE(nextSession.patterns(project).first().id, id);
+}
+
+void tst_ProjectPatterns::problemsAreReportedOncePerChange()
+{
+    QTemporaryDir dir;
+    const FilePath project = FilePath::fromString(dir.path());
+    writeFile(project, idless);
+    ProjectPatterns store;
+    QSignalSpy problems(&store, &ProjectPatterns::problemsFound);
+    store.addProject(project);
+    QCOMPARE(problems.size(), 1);
+
+    store.reload(project);
+    store.reload(project);
+    QCOMPARE(problems.size(), 1);
+
+    writeFile(project, "{ broken");
+    store.reload(project);
+    store.reload(project);
+    QCOMPARE(problems.size(), 2);
+}
+
+void tst_ProjectPatterns::shutdownStopsWatching()
+{
+    QTemporaryDir dir;
+    const FilePath project = FilePath::fromString(dir.path());
+    writeFile(project, exportPatterns({pattern("t1", "One")}));
+    ProjectPatterns store;
+    store.addProject(project);
+
+    store.shutdown();
+    QVERIFY(!store.hasProject(project));
+    // Late calls (projects closing during shutdown) are harmless.
+    store.removeProject(project);
+    store.addProject(project);
+    QCOMPARE(names(store.patterns(project)), QStringList{"One"});
+    store.reload(project);
 }
 
 QTEST_GUILESS_MAIN(tst_ProjectPatterns)

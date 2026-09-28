@@ -26,6 +26,9 @@ MultiFilterOutputPlugin::~MultiFilterOutputPlugin()
     delete m_outputPane;
     delete m_runTracker;
     delete m_settingsPage;
+    // Its file watcher must go while Qt is still up; the store itself is a function-local
+    // static, destroyed only after QApplication.
+    projectPatterns().shutdown();
 }
 
 void MultiFilterOutputPlugin::initialize()

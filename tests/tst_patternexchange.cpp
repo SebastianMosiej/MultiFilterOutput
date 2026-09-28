@@ -17,6 +17,7 @@ private slots:
     void parseRejectsWhatIsNotAPatternLibrary();
     void parseRepairsIdsAndReportsProblems();
     void parseWarnsAboutNewerFiles();
+    void seededParseGivesStableIds();
     void planSortsIntoAddedUnchangedAndConflicting();
     void applyReplaceKeepsTheLibraryOrder();
     void applyKeepExistingOnlyAdds();
@@ -127,6 +128,30 @@ void tst_PatternExchange::parseWarnsAboutNewerFiles()
     QVERIFY(parsed.error.isEmpty());
     QCOMPARE(parsed.patterns.size(), 1);
     QCOMPARE(parsed.warnings.size(), 1);
+}
+
+void tst_PatternExchange::seededParseGivesStableIds()
+{
+    const QByteArray json = R"({
+        "format": "MultiFilterOutput.PatternLibrary", "version": 1,
+        "patterns": [
+            {"name": "No id", "patternText": "a"},
+            {"id": "same", "name": "First", "patternText": "b"},
+            {"id": "same", "name": "Second", "patternText": "c"}
+        ]})";
+    const ParsedPatterns first = parsePatterns(json, "/work/app/.qtcreator/p.json");
+    const ParsedPatterns again = parsePatterns(json, "/work/app/.qtcreator/p.json");
+    QVERIFY(!first.patterns.at(0).id.isEmpty());
+    QCOMPARE(again.patterns.at(0).id, first.patterns.at(0).id);
+    QCOMPARE(first.patterns.at(1).id, QStringLiteral("same"));
+    QVERIFY(first.patterns.at(2).id != "same");
+    QCOMPARE(again.patterns.at(2).id, first.patterns.at(2).id);
+    QVERIFY(first.patterns.at(0).id != first.patterns.at(2).id);
+    QCOMPARE(first.warnings.size(), 2); // both still reported
+
+    // Another file: other ids.
+    QVERIFY(parsePatterns(json, "/work/other/.qtcreator/p.json").patterns.at(0).id
+            != first.patterns.at(0).id);
 }
 
 void tst_PatternExchange::planSortsIntoAddedUnchangedAndConflicting()
