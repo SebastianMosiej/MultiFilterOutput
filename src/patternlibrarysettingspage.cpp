@@ -35,6 +35,7 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QRegularExpression>
+#include <QResizeEvent>
 #include <QSpinBox>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -66,12 +67,52 @@ public:
 
     std::function<void()> onRowsReordered;
 
+    // QHeaderView::Stretch only splits space evenly, so Name and Pattern are fixed-mode
+    // sections sized here: they share whatever the content-sized flag columns leave over,
+    // with Name getting 0.3 of Pattern's share.
+    void setUpColumnWidths()
+    {
+        QHeaderView *h = header();
+        h->setStretchLastSection(false);
+        h->setSectionResizeMode(NameColumn, QHeaderView::Fixed);
+        h->setSectionResizeMode(PatternColumn, QHeaderView::Fixed);
+        for (int column : {RegexColumn, CaseColumn, InvertColumn, ColorColumn, DefaultColumn})
+            h->setSectionResizeMode(column, QHeaderView::ResizeToContents);
+        connect(h, &QHeaderView::sectionResized, this, [this](int logicalIndex) {
+            if (logicalIndex != NameColumn && logicalIndex != PatternColumn)
+                distributeStretchWidth();
+        });
+        distributeStretchWidth();
+    }
+
 protected:
     void dropEvent(QDropEvent *event) override
     {
         QTreeWidget::dropEvent(event);
         if (onRowsReordered)
             onRowsReordered();
+    }
+
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QTreeWidget::resizeEvent(event);
+        distributeStretchWidth();
+    }
+
+private:
+    void distributeStretchWidth()
+    {
+        QHeaderView *h = header();
+        int available = viewport()->width();
+        for (int column : {RegexColumn, CaseColumn, InvertColumn, ColorColumn, DefaultColumn})
+            available -= h->sectionSize(column);
+        constexpr double nameWeight = 0.3;
+        constexpr double patternWeight = 1.0;
+        const int minimum = h->minimumSectionSize();
+        const int nameWidth = qMax(minimum,
+                                   int(available * nameWeight / (nameWeight + patternWeight)));
+        h->resizeSection(NameColumn, nameWidth);
+        h->resizeSection(PatternColumn, qMax(minimum, available - nameWidth));
     }
 };
 
@@ -252,8 +293,7 @@ public:
         m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
         m_tree->setDragDropMode(QAbstractItemView::InternalMove);
         m_tree->setDropIndicatorShown(true);
-        m_tree->header()->setSectionResizeMode(NameColumn, QHeaderView::Stretch);
-        m_tree->header()->setSectionResizeMode(PatternColumn, QHeaderView::Stretch);
+        m_tree->setUpColumnWidths();
         refreshTree();
 
         auto *addButton = new QPushButton(Tr::tr("Add"), this);
