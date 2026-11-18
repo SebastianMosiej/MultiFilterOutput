@@ -327,3 +327,7 @@ Creator version — see **Requirements**.
    line — e.g. a QML runtime warning like
    `qrc:/qt/qml/MyView.qml:67:13: Unable to assign [undefined] to bool` —
    to open that file at that exact line and column in the editor.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
