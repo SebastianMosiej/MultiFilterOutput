@@ -39,6 +39,10 @@ bool LineQueue::isHopelesslyBehind()
     if (!m_backlogHistory.isEmpty() && m_backlogHistory.last() > backlog)
         m_backlogHistory.clear();
     m_backlogHistory << backlog;
+    // Only the last eleven are ever looked at; steady output that never shrinks the backlog
+    // would otherwise grow this by one entry per slice for the whole run.
+    if (m_backlogHistory.size() > 11)
+        m_backlogHistory.removeFirst();
     if (m_backlogHistory.size() > 10 && backlog > 5 * m_lastSliceLines)
         return true;
 
@@ -128,7 +132,10 @@ int LineQueue::processPending()
 
     if (processed > 0) {
         m_lastSliceLines = processed;
-        ++m_slices;
+        // Only ever compared with 10 (see isHopelesslyBehind()); stopping there means a long
+        // run can't overflow it.
+        if (m_slices < 10)
+            ++m_slices;
     }
     // Nothing left to put the notice in front of (the whole backlog was dropped): say so now.
     if (m_queue.isEmpty())
