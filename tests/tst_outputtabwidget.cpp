@@ -23,6 +23,7 @@ private slots:
     void initTestCase();
     void jumpLandsOnMirroredLineAfterAllTabTrims();
     void matchCountChangedIsCoalesced();
+    void matchCountChangedIsCoalescedAcrossSlices();
     void jumpToLineTrimmedFromAllTabFails();
     void clickMapsCorrectlyAfterPatternTabTrims();
     void longLineIsTruncatedForDisplay();
@@ -167,6 +168,25 @@ void tst_OutputTabWidget::matchCountChangedIsCoalesced()
     QCOMPARE(spy.first().first().toInt(), 100);
     QTest::qWait(20);
     QCOMPARE(spy.size(), 1);
+}
+
+// Live output arrives in slices, one per event-loop pass (see LineQueue), up to about a
+// hundred a second: relabelling after each would cost a tab bar relayout per slice, for a
+// count nobody can read that fast. Matches within a short interval share one relabel.
+void tst_OutputTabWidget::matchCountChangedIsCoalescedAcrossSlices()
+{
+    OutputTabWidget tab;
+    QSignalSpy spy(&tab, &OutputTabWidget::matchCountChanged);
+
+    for (int slice = 0; slice < 5; ++slice) {
+        for (int i = 0; i < 10; ++i)
+            tab.appendLine(QStringLiteral("line %1").arg(i), Utils::StdOutFormat);
+        QCoreApplication::processEvents();
+    }
+
+    QCOMPARE(spy.size(), 0);
+    QTRY_COMPARE(spy.size(), 1);
+    QCOMPARE(spy.first().first().toInt(), 50);
 }
 
 static QString lastLineText(const OutputTabWidget &tab)

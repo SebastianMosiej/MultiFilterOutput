@@ -189,10 +189,12 @@ OutputTabWidget::OutputTabWidget(QWidget *parent)
     // find support and deletes it along with this widget.
     Compat::Aggregation::aggregate({this, new Core::BaseTextFind<QPlainTextEdit>(this)});
 
-    // Coalesces matchCountChanged(): appendLine() only starts this zero-interval timer, so a
-    // burst of matches appended within one event-loop pass costs a single tab relabel.
+    // Coalesces matchCountChanged(): appendLine() only starts this timer if it isn't running,
+    // so all the matches within an interval cost a single tab relabel -- each of which lays
+    // the whole tab bar out again. Not zero: live output arrives in slices, one per event-loop
+    // pass (see LineQueue), and a count changing a hundred times a second can't be read anyway.
     m_matchCountTimer.setSingleShot(true);
-    m_matchCountTimer.setInterval(0);
+    m_matchCountTimer.setInterval(150);
     connect(&m_matchCountTimer, &QTimer::timeout, this, [this] {
         emit matchCountChanged(m_matchCount);
     });
