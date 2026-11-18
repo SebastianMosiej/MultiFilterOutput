@@ -41,6 +41,7 @@ private slots:
     void goToMatchStepsThroughMarkedLinesAndWraps();
     void goToMatchWithoutMarksDoesNothing();
     void matchStopsSurviveTrimming();
+    void trimmingAwayEveryMatchLeavesNoMatchStops();
     void resetClearsMatchStops();
     void saveContentsWritesTabTextAsUtf8();
     void saveContentsReportsFailure();
@@ -395,6 +396,23 @@ void tst_OutputTabWidget::matchStopsSurviveTrimming()
     QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("match 18"));
     tab.goToMatch(OutputTabWidget::Direction::Backward);
     QCOMPARE(tab.textCursor().selectedText(), QStringLiteral("match 16"));
+}
+
+// Once the character limit has trimmed every marked line away, F6 has nothing to step to and
+// must not stay enabled.
+void tst_OutputTabWidget::trimmingAwayEveryMatchLeavesNoMatchStops()
+{
+    OutputTabWidget tab;
+    tab.setMaxCharacterCount(100);
+    appendMarked(tab, "match");
+    appendMarked(tab, "another match");
+    QVERIFY(tab.hasMatchStops());
+
+    for (int i = 0; i < 20; ++i)
+        tab.appendLine(QStringLiteral("other line %1").arg(i), Utils::StdOutFormat);
+
+    QVERIFY(!tab.toPlainText().contains("match"));
+    QVERIFY(!tab.hasMatchStops());
 }
 
 // A new run or Clear empties the tab; F6 must not stay enabled for matches that are gone.

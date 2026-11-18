@@ -351,7 +351,7 @@ void OutputTabWidget::markLastLineAsMatch()
 {
     // The last block is the empty one appendLine()'s newline opened; the line is before it.
     const QTextBlock block = document()->lastBlock().previous();
-    if (!block.isValid())
+    if (!block.isValid() || isMatchStop(block)) // counted once (see makeRoomFor())
         return;
     setBlockProperty(block, MatchStopProperty, true);
     ++m_matchStops;
@@ -701,6 +701,9 @@ void OutputTabWidget::makeRoomFor(qsizetype incomingCharacters)
          b = b.next()) {
         planned -= b.length();
         --keepBlocks;
+        // Its match stop goes with it: F6 must not stay enabled with nothing left to step to.
+        if (isMatchStop(b))
+            --m_matchStops;
     }
     setMaximumBlockCount(keepBlocks);
     setMaximumBlockCount(0); // trimming done; 0 = no block limit
