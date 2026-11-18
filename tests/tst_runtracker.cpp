@@ -27,6 +27,7 @@ private slots:
     void outputAfterStopIsIgnored();
     void destroyingActiveRunClearsIt();
     void destroyingInactiveRunKeepsActive();
+    void destroyingActiveRunFallsBackToALiveRun();
     void rerunOfSameRunControlFlowsAgain();
     void rerunOfSameRunControlResetsPane();
     void keepsHistoryOfEveryLiveRun();
@@ -171,6 +172,26 @@ void tst_RunTracker::destroyingInactiveRunKeepsActive()
 
     QCOMPARE(tracker.activeRunControl(), newer.get());
     QCOMPARE(changed.size(), 0);
+}
+
+// The run on screen going away (its Application Output tab closed) while another run is still
+// live: the pane moves to that run, as switching the follow mode would, rather than going
+// blank until yet another run starts.
+void tst_RunTracker::destroyingActiveRunFallsBackToALiveRun()
+{
+    RunTracker tracker;
+    auto client = makeRun();
+    auto server = makeRun();
+    tracker.trackRunControl(client.get());
+    tracker.trackRunControl(server.get());
+    tracker.pinRunControl(server.get());
+    tracker.untrackRunControl(server.get());
+
+    server.reset();
+
+    QCOMPARE(tracker.activeRunControl(), client.get());
+    QCOMPARE(tracker.followMode(), RunTracker::FollowMode::NewestRun);
+    QVERIFY(tracker.lastActivationWasSwitch());
 }
 
 // Application Output's Re-run restarts the *same* RunControl, which reports started again:

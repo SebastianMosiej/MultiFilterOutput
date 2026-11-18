@@ -104,6 +104,8 @@ private:
     // `isSwitch`: see lastActivationWasSwitch().
     void activateRunControl(ProjectExplorer::RunControl *runControl, bool isSwitch = false);
     void forgetRunControl(ProjectExplorer::RunControl *runControl);
+    // The live run the follow mode (not Pinned) would show; nullptr if none is live.
+    ProjectExplorer::RunControl *runToFollow() const;
     // Forgets the oldest finished runs beyond m_finishedRunsKept.
     void trimFinishedRuns();
 

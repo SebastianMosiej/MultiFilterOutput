@@ -48,23 +48,29 @@ void RunTracker::setFollowMode(FollowMode mode)
         return;
     m_followMode = mode;
 
-    // Catch up with what the new mode would have chosen: the run whose tab Application Output
-    // shows, or the newest live run. Nothing live: keep what is on screen.
-    RunControl *wanted = nullptr;
-#if MULTIFILTEROUTPUT_QTC21
-    if (mode == FollowMode::ApplicationOutput) {
-        for (RunControl *runControl : std::as_const(m_liveOrder)) {
-            if (runControl->isOutputVisible())
-                wanted = runControl;
-        }
-    }
-#endif
-    if (!wanted && !m_liveOrder.isEmpty())
-        wanted = m_liveOrder.last();
+    // Catch up with what the new mode would have chosen. Nothing live: keep what is on screen.
+    RunControl *wanted = runToFollow();
     if (wanted && wanted != m_active)
         activateRunControl(wanted, /*isSwitch=*/true);
     else
         emit runsChanged();
+}
+
+RunControl *RunTracker::runToFollow() const
+{
+    // The run whose tab Application Output shows, or the newest live run.
+#if MULTIFILTEROUTPUT_QTC21
+    if (m_followMode == FollowMode::ApplicationOutput) {
+        RunControl *visible = nullptr;
+        for (RunControl *runControl : std::as_const(m_liveOrder)) {
+            if (runControl->isOutputVisible())
+                visible = runControl;
+        }
+        if (visible)
+            return visible;
+    }
+#endif
+    return m_liveOrder.isEmpty() ? nullptr : m_liveOrder.last();
 }
 
 void RunTracker::pinRunControl(RunControl *runControl)
@@ -248,6 +254,12 @@ void RunTracker::handleRunControlDestroyed(RunControl *runControl)
         // Nothing left to stay pinned to: let the next run take over.
         if (m_followMode == FollowMode::Pinned)
             m_followMode = FollowMode::NewestRun;
+        // A run still live takes over now, as setFollowMode()'s catch-up would choose it --
+        // not only once yet another run starts.
+        if (RunControl *next = runToFollow()) {
+            activateRunControl(next, /*isSwitch=*/true);
+            return;
+        }
         m_active = nullptr;
         m_lastActivationWasSwitch = false;
         emit activeRunChanged(nullptr);
