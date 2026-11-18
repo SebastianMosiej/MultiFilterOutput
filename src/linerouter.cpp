@@ -1,6 +1,27 @@
 #include "linerouter.h"
 
+#include <utils/ansiescapecodehandler.h>
+
 namespace MultiFilterOutput {
+
+namespace {
+
+// `line` as a tab shows it: Utils::OutputFormatter turns its ANSI escape sequences into
+// colors, so they are not part of the text a pattern sees -- live, or when what All shows is
+// matched again (see FilteredOutputPane::replayAllIntoPatternTabs()).
+QString withoutEscapeSequences(const QString &line)
+{
+    if (!line.contains(QChar(0x1b)))
+        return line;
+    QString text;
+    text.reserve(line.size());
+    for (const Utils::FormattedText &part :
+         Utils::AnsiEscapeCodeHandler().parseText(Utils::FormattedText(line)))
+        text += part.text;
+    return text;
+}
+
+} // namespace
 
 LineRouter::LineRouter(const QList<Pattern> &patterns, std::chrono::milliseconds slowThreshold)
 {
@@ -9,8 +30,10 @@ LineRouter::LineRouter(const QList<Pattern> &patterns, std::chrono::milliseconds
         m_states.append({pattern, false, SlowMatchBreaker(slowThreshold)});
 }
 
-LineRouter::Result LineRouter::route(const QString &line, Utils::OutputFormat format, int lineTag)
+LineRouter::Result LineRouter::route(
+    const QString &rawLine, Utils::OutputFormat format, int lineTag)
 {
+    const QString line = withoutEscapeSequences(rawLine);
     Result result;
     for (int i = 0; i < m_states.size(); ++i) {
         if (m_states.at(i).breaker.isTripped())

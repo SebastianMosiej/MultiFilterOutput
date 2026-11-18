@@ -42,6 +42,7 @@ class tst_LineRouter : public QObject
 
 private slots:
     void routesLinesToEveryMatchingPattern();
+    void matchesTheLineWithoutItsEscapeSequences();
     void invertedPatternTakesNonMatchingLines();
     void continuationLinesAreSweptInWithoutCounting();
     void lineEndingContinuationIsRecheckedAsCandidate();
@@ -72,6 +73,18 @@ void tst_LineRouter::routesLinesToEveryMatchingPattern()
     QCOMPARE(router.route("12:00 ERROR disk full", Utils::StdOutFormat).routes, (Routes{{0, true}}));
     QCOMPARE(router.route("net ERROR timeout", Utils::StdOutFormat).routes, (Routes{{0, true}, {1, true}}));
     QCOMPARE(router.route("all good", Utils::StdOutFormat).routes, Routes{});
+}
+
+// Tabs show a line with its ANSI escape sequences turned into colors, and a pattern is
+// matched against the line as shown -- so live output and a re-match of what All shows
+// (after a pattern edit, say) agree on what matches.
+void tst_LineRouter::matchesTheLineWithoutItsEscapeSequences()
+{
+    LineRouter router({regexPattern("^ERROR boom$"), regexPattern("31m")});
+
+    QCOMPARE(
+        router.route("\x1b[31mERROR\x1b[0m boom", Utils::StdOutFormat).routes,
+        (Routes{{0, true}}));
 }
 
 void tst_LineRouter::invertedPatternTakesNonMatchingLines()
