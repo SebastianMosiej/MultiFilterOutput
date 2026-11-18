@@ -817,11 +817,12 @@ void FilteredOutputPane::onTabZoomChanged(qreal zoom)
     for (const PatternTab &entry : std::as_const(m_patternTabs))
         entry.tab->setFontZoom(zoom);
 
+    // No sync(): this runs on every Ctrl+wheel step, and QSettings (and Qt Creator, at
+    // shutdown) write the value out on their own.
     Utils::QtcSettings *settings = Core::ICore::settings();
     settings->beginGroup(Constants::SETTINGS_GROUP);
     settings->setValue(Constants::OUTPUT_FONT_ZOOM_KEY, zoom);
     settings->endGroup();
-    settings->sync();
 }
 
 void FilteredOutputPane::updateTabLabel(const Pattern &pattern, OutputTabWidget *tab, int count)
