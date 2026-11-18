@@ -55,6 +55,7 @@ private slots:
     void lastLineTextIsTheLineAsShown();
     void highlightLastLineTintsExactlyTheSpans();
     void timestampsAreStoredAndReported();
+    void timestampsDoNotGrowTheDocumentFormats();
     void formatTimestampShowsLocalTime();
     void timestampGutterAppearsOnlyWhenShown();
     void lineLooksUpOneLineById();
@@ -619,6 +620,27 @@ void tst_OutputTabWidget::timestampsAreStoredAndReported()
     const QList<OutputTabWidget::Line> lines = tab.lines();
     QCOMPARE(lines.at(0).timestamp, 1234567890123);
     QCOMPARE(lines.at(1).timestamp, 0);
+}
+
+// A QTextDocument never forgets a block format, even after the block is trimmed: if every
+// line's timestamp were part of its block format, a long-running tab would keep one format
+// per millisecond for as long as it lives.
+void tst_OutputTabWidget::timestampsDoNotGrowTheDocumentFormats()
+{
+    OutputTabWidget tab;
+    tab.setMaxCharacterCount(2000);
+    for (int i = 0; i < 1000; ++i) {
+        tab.appendLine(QStringLiteral("line %1").arg(i), Utils::StdOutFormat, -1, true, 1000 + i);
+        if (i % 2 == 0)
+            tab.markLastLineAsMatch();
+    }
+
+    QVERIFY2(
+        tab.document()->allFormats().size() < 50,
+        qPrintable(QString::number(tab.document()->allFormats().size())));
+    const QList<OutputTabWidget::Line> lines = tab.lines();
+    QCOMPARE(lines.last().timestamp, 1999);
+    QCOMPARE(lines.last().text, QStringLiteral("line 999"));
 }
 
 void tst_OutputTabWidget::formatTimestampShowsLocalTime()

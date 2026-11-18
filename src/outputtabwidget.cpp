@@ -75,10 +75,28 @@ constexpr int MatchStopProperty = QTextFormat::UserProperty + 1;
 // The line's Utils::OutputFormat, and whether it is the pane's own notice (see lines()).
 constexpr int OutputFormatProperty = QTextFormat::UserProperty + 2;
 constexpr int NoticeProperty = QTextFormat::UserProperty + 3;
-// When the line arrived, ms since the epoch (see appendLine()).
-constexpr int TimestampProperty = QTextFormat::UserProperty + 4;
+// (UserProperty + 4 was the line's timestamp; see LineData.)
 // The line is the previous run's output, kept greyed out (see grayOutOldContent()).
 constexpr int OldRunProperty = QTextFormat::UserProperty + 5;
+
+// When the line arrived, ms since the epoch (see appendLine()). Not a block format property
+// like the flags above: a QTextDocument keeps every distinct format it has ever seen until it
+// is cleared -- trimming blocks frees none -- and nearly every line has a timestamp of its
+// own. Block user data is freed with its block.
+class LineData final : public QTextBlockUserData
+{
+public:
+    explicit LineData(qint64 timestamp)
+        : timestamp(timestamp)
+    {}
+    const qint64 timestamp;
+};
+
+qint64 blockTimestamp(const QTextBlock &block)
+{
+    const auto data = static_cast<const LineData *>(block.userData());
+    return data ? data->timestamp : 0;
+}
 
 void setBlockProperty(const QTextBlock &block, int property, const QVariant &value)
 {
@@ -214,9 +232,10 @@ int OutputTabWidget::appendLine(
     // free to carry the line id -- see the class comment.
     QTextBlock block = document()->lastBlock().previous();
     block.setUserState(lineId);
+    // Only a handful of distinct block formats this way (see LineData).
     setBlockProperty(block, OutputFormatProperty, int(format));
     if (timestamp > 0)
-        setBlockProperty(block, TimestampProperty, timestamp);
+        block.setUserData(new LineData(timestamp));
     if (!m_filter.text.isEmpty())
         filterAppendedLine(block);
 
@@ -417,7 +436,7 @@ static OutputTabWidget::Line lineFromBlock(const QTextBlock &block)
         Utils::OutputFormat(format.intProperty(OutputFormatProperty)),
         block.userState(),
         format.boolProperty(NoticeProperty),
-        format.property(TimestampProperty).toLongLong(),
+        blockTimestamp(block),
         format.boolProperty(OldRunProperty)};
 }
 
@@ -623,7 +642,7 @@ void OutputTabWidget::paintTimestampGutter(QPaintEvent *event)
         const qreal height = blockBoundingRect(block).height();
         // Hidden by the quick filter: takes no room and gets no timestamp.
         if (block.isVisible() && top + height >= event->rect().top()) {
-            const qint64 timestamp = block.blockFormat().property(TimestampProperty).toLongLong();
+            const qint64 timestamp = blockTimestamp(block);
             if (timestamp > 0) {
                 painter.drawText(
                     QRectF(0, top, right, fontMetrics().height()),
