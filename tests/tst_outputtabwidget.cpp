@@ -297,8 +297,6 @@ void tst_OutputTabWidget::lineIdsWrapInsteadOfOverflowing()
     QCOMPARE(nextLineId(LineIdModulus - 1), 0);
 }
 
-// scrollToLine() finds a line by how far back from the newest one it is; that distance must
-// stay right when the ids have wrapped in between.
 // QTextCursor::insertText() starts a new block at a paragraph separator (and the frame
 // markers); a line holding one must still be one block, carrying its line id.
 void tst_OutputTabWidget::blockSeparatorsInALineDoNotSplitIt()
@@ -314,6 +312,8 @@ void tst_OutputTabWidget::blockSeparatorsInALineDoNotSplitIt()
     QCOMPARE(tab.lines().first().text, QStringLiteral("a b c d"));
 }
 
+// scrollToLine() finds a line by how far back from the newest one it is; that distance must
+// stay right when the ids have wrapped in between.
 void tst_OutputTabWidget::lineIdAgeAcrossTheWrap()
 {
     QCOMPARE(lineIdAge(10, 7, 100), 3);

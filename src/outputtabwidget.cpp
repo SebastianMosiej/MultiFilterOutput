@@ -51,9 +51,6 @@ qsizetype cutBeforeOpenEscape(const QString &line, qsizetype cut)
     return esc;
 }
 
-// `line` as shown in a tab with the given setMaxLineLength(): cut after maxLength characters
-// -- earlier rather than separate a surrogate pair or split an escape sequence -- and
-// followed by how much was left out.
 // The characters QTextCursor::insertText() starts a new block at, besides "\n": in a line they
 // would split it into blocks of which only the last carries the line id (see appendLine()).
 bool isBlockSeparator(QChar c)
@@ -73,6 +70,9 @@ QString withoutBlockSeparators(const QString &line)
     return result;
 }
 
+// `line` as shown in a tab with the given setMaxLineLength(): cut after maxLength characters
+// -- earlier rather than separate a surrogate pair or split an escape sequence -- and
+// followed by how much was left out.
 QString displayText(const QString &rawLine, int maxLength)
 {
     const QString line = withoutBlockSeparators(rawLine);
