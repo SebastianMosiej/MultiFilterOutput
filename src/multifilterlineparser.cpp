@@ -14,11 +14,10 @@
 namespace MultiFilterOutput::Internal {
 
 MultiFilterLineParser::MultiFilterLineParser(ProjectExplorer::Project *project)
+    : m_project(project)
 {
-    if (project) {
+    if (project)
         m_finder.setProjectDirectory(project->projectDirectory());
-        m_finder.setProjectFiles(project->files(ProjectExplorer::Project::SourceFiles));
-    }
 }
 
 Utils::OutputLineParser::Result MultiFilterLineParser::handleLine(
@@ -45,6 +44,10 @@ bool MultiFilterLineParser::handleLink(const QString &href)
         return false;
     // qrc: and file: URLs as they are; anything else is a local path, possibly relative or
     // with native separators -- FileInProjectFinder resolves it against the project.
+    if (!m_projectFilesSet && m_project) {
+        m_finder.setProjectFiles(m_project->files(ProjectExplorer::Project::SourceFiles));
+        m_projectFilesSet = true;
+    }
     const bool isUrl = ref->path.startsWith("qrc:") || ref->path.startsWith("file:");
     const QUrl fileUrl = isUrl ? QUrl(ref->path)
                                : QUrl::fromLocalFile(QDir::fromNativeSeparators(ref->path));
