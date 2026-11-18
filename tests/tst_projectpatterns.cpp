@@ -24,6 +24,8 @@ private slots:
     void shareCreatesTheFile();
     void shareReplacesByIdAndKeepsTheRest();
     void shareRefusesToOverwriteAnUnreadableFile();
+    void shareKeepsTheIdsOfEntriesWithoutOne();
+    void shareRefusesToDowngradeANewerFile();
     void combinedPatternsLetTheProjectWin();
     void entriesWithoutIdsKeepTheirIds();
     void problemsAreReportedOncePerChange();
@@ -260,6 +262,43 @@ void tst_ProjectPatterns::problemsAreReportedOncePerChange()
     store.reload(project);
     store.reload(project);
     QCOMPARE(problems.size(), 2);
+}
+
+// Sharing rewrites the file: an entry that had no id must be written with the id run
+// configurations already select it by (the one reload() gave it), not a random new one.
+void tst_ProjectPatterns::shareKeepsTheIdsOfEntriesWithoutOne()
+{
+    QTemporaryDir dir;
+    const FilePath project = FilePath::fromString(dir.path());
+    writeFile(project, idless);
+    ProjectPatterns store;
+    store.addProject(project);
+    const QString id = store.patterns(project).first().id;
+
+    QVERIFY(store.share(project, {pattern("p1", "Shared")}));
+
+    QCOMPARE(store.patterns(project).first().name, QString("Hand-written"));
+    QCOMPARE(store.patterns(project).first().id, id);
+}
+
+// Re-exporting a newer version's file in this version's format would drop whatever that
+// version added, for the whole team.
+void tst_ProjectPatterns::shareRefusesToDowngradeANewerFile()
+{
+    QTemporaryDir dir;
+    const FilePath project = FilePath::fromString(dir.path());
+    const QByteArray newer = R"({"format": "MultiFilterOutput.PatternLibrary", "version": 99,
+        "patterns": [{"id": "t1", "name": "One", "patternText": "x", "future": true}]})";
+    writeFile(project, newer);
+    ProjectPatterns store;
+    store.addProject(project);
+
+    const Utils::Result<> shared = store.share(project, {pattern("p1", "Shared")});
+
+    QVERIFY(!shared);
+    QVERIFY(!shared && shared.error().contains("newer"));
+    QCOMPARE(
+        ProjectPatterns::patternFile(project).fileContents().value_or(QByteArray()), newer);
 }
 
 void tst_ProjectPatterns::shutdownStopsWatching()

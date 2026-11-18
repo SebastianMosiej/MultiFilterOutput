@@ -27,6 +27,9 @@ struct ParsedPatterns
     // Read, but with problems worth telling the user about (see validatePatterns(); a file
     // from a newer version).
     QStringList warnings;
+    // Written by a newer version, in a format this one only partly understands: writing it
+    // back would lose what that version added.
+    bool newerFormat = false;
 };
 // With an `idSeed` (a project's pattern file: see ProjectPatterns), a pattern without an id
 // of its own -- or sharing one -- is given one derived from the seed and its place in the

@@ -112,11 +112,19 @@ Utils::Result<> ProjectPatterns::share(
         const Utils::Result<QByteArray> contents = file.fileContents();
         if (!contents)
             return Utils::ResultError(contents.error());
-        const ParsedPatterns parsed = parsePatterns(*contents);
+        // The same seed as reload(): entries without an id keep the ids run configurations
+        // already select them by, and are written back with them.
+        const ParsedPatterns parsed = parsePatterns(*contents, file.path());
         if (!parsed.error.isEmpty()) {
             return Utils::ResultError(
                 Tr::tr("\"%1\" could not be read, so it was left alone: %2")
                     .arg(file.toUserOutput(), parsed.error));
+        }
+        if (parsed.newerFormat) {
+            return Utils::ResultError(
+                Tr::tr("\"%1\" was written by a newer version of MultiFilterOutput; sharing from "
+                       "this version would drop what that version added, so it was left alone.")
+                    .arg(file.toUserOutput()));
         }
         existing = parsed.patterns;
     }

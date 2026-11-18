@@ -64,6 +64,7 @@ ParsedPatterns parsePatterns(const QByteArray &json, const QString &idSeed)
         return result;
     }
     if (const int version = root.value("version").toInt(); version > FormatVersion) {
+        result.newerFormat = true;
         result.warnings << Tr::tr("The file was written by a newer version of MultiFilterOutput "
                                   "(format %1; this version understands up to %2). Anything that "
                                   "version added is left out.")
