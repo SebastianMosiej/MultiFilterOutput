@@ -475,9 +475,14 @@ std::optional<OutputTabWidget::Line> OutputTabWidget::line(int lineId) const
 QList<OutputTabWidget::Line> OutputTabWidget::lines() const
 {
     QList<Line> result;
-    for (QTextBlock b = document()->firstBlock(); b != document()->lastBlock(); b = b.next())
-        result.append(lineFromBlock(b));
+    forEachLine([&result](const Line &line) { result.append(line); });
     return result;
+}
+
+void OutputTabWidget::forEachLine(const std::function<void(const Line &)> &visit) const
+{
+    for (QTextBlock b = document()->firstBlock(); b != document()->lastBlock(); b = b.next())
+        visit(lineFromBlock(b));
 }
 
 bool OutputTabWidget::hasMatchStops() const

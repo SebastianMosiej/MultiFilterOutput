@@ -12,6 +12,7 @@
 #include <QPoint>
 #include <QTimer>
 
+#include <functional>
 #include <limits>
 #include <optional>
 
@@ -142,6 +143,9 @@ public:
         bool isOld = false; // see grayOutOldContent()
     };
     QList<Line> lines() const;
+    // The same lines, one at a time, without copying them all first. `visit` must not add
+    // lines to or remove them from this tab.
+    void forEachLine(const std::function<void(const Line &)> &visit) const;
     // The line with this id (see appendLine()), if the tab still holds it.
     std::optional<Line> line(int lineId) const;
 

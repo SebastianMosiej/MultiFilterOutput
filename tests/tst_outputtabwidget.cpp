@@ -51,6 +51,7 @@ private slots:
     void filterAppliesToLinesAppendedLater();
     void linesReportTextFormatIdAndNotices();
     void linesOnlyReportWhatTheTabStillHolds();
+    void forEachLineVisitsWhatLinesReports();
     void matchStopsCanBeReassignedByLineId();
     void characterLimitDropsOldestLines();
     void characterLimitKeepsNewestLineEvenIfLonger();
@@ -563,6 +564,31 @@ void tst_OutputTabWidget::linesOnlyReportWhatTheTabStillHolds()
     QCOMPARE(lines.first().text, QStringLiteral("line 7"));
     QCOMPARE(lines.first().lineId, 7);
     QCOMPARE(lines.last().text, QStringLiteral("line 9"));
+}
+
+// The replay walks All's lines in place rather than copying them all first (All can hold
+// millions of characters); it must see exactly what lines() reports.
+void tst_OutputTabWidget::forEachLineVisitsWhatLinesReports()
+{
+    OutputTabWidget tab;
+    tab.setMaximumBlockCount(4);
+    for (int i = 0; i < 10; ++i)
+        tab.appendLine(QStringLiteral("line %1").arg(i), Utils::StdErrFormat, -1, true, 100 + i);
+    tab.markLastLineAsNotice();
+
+    QList<OutputTabWidget::Line> visited;
+    tab.forEachLine([&](const OutputTabWidget::Line &line) { visited << line; });
+
+    const QList<OutputTabWidget::Line> lines = tab.lines();
+    QCOMPARE(visited.size(), lines.size());
+    for (qsizetype i = 0; i < lines.size(); ++i) {
+        QCOMPARE(visited.at(i).text, lines.at(i).text);
+        QCOMPARE(visited.at(i).format, lines.at(i).format);
+        QCOMPARE(visited.at(i).lineId, lines.at(i).lineId);
+        QCOMPARE(visited.at(i).isNotice, lines.at(i).isNotice);
+        QCOMPARE(visited.at(i).timestamp, lines.at(i).timestamp);
+        QCOMPARE(visited.at(i).isOld, lines.at(i).isOld);
+    }
 }
 
 // After a replay the match stops must follow the new patterns, not the old ones.
