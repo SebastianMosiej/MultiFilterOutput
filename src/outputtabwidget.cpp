@@ -22,6 +22,8 @@
 #include <QTextCursor>
 #include <QWheelEvent>
 
+#include <algorithm>
+
 namespace MultiFilterOutput {
 
 namespace {
@@ -52,8 +54,28 @@ qsizetype cutBeforeOpenEscape(const QString &line, qsizetype cut)
 // `line` as shown in a tab with the given setMaxLineLength(): cut after maxLength characters
 // -- earlier rather than separate a surrogate pair or split an escape sequence -- and
 // followed by how much was left out.
-QString displayText(const QString &line, int maxLength)
+// The characters QTextCursor::insertText() starts a new block at, besides "\n": in a line they
+// would split it into blocks of which only the last carries the line id (see appendLine()).
+bool isBlockSeparator(QChar c)
 {
+    return c == QChar::ParagraphSeparator || c.unicode() == 0xfdd0 || c.unicode() == 0xfdd1;
+}
+
+QString withoutBlockSeparators(const QString &line)
+{
+    if (std::none_of(line.cbegin(), line.cend(), isBlockSeparator))
+        return line;
+    QString result = line;
+    for (QChar &c : result) {
+        if (isBlockSeparator(c))
+            c = u' ';
+    }
+    return result;
+}
+
+QString displayText(const QString &rawLine, int maxLength)
+{
+    const QString line = withoutBlockSeparators(rawLine);
     if (maxLength <= 0 || line.size() <= maxLength)
         return line;
     qsizetype cut = maxLength;

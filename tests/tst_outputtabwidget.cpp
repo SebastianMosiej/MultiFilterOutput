@@ -35,6 +35,7 @@ private slots:
     void truncationNeverSplitsEscapeSequence();
     void lineIdsWrapInsteadOfOverflowing();
     void lineIdAgeAcrossTheWrap();
+    void blockSeparatorsInALineDoNotSplitIt();
     void ctrlFFindsTextInTab();
     void goToMatchStepsThroughMarkedLinesAndWraps();
     void goToMatchWithoutMarksDoesNothing();
@@ -276,6 +277,21 @@ void tst_OutputTabWidget::lineIdsWrapInsteadOfOverflowing()
 
 // scrollToLine() finds a line by how far back from the newest one it is; that distance must
 // stay right when the ids have wrapped in between.
+// QTextCursor::insertText() starts a new block at a paragraph separator (and the frame
+// markers); a line holding one must still be one block, carrying its line id.
+void tst_OutputTabWidget::blockSeparatorsInALineDoNotSplitIt()
+{
+    OutputTabWidget tab;
+    const QString line = QStringLiteral("a") + QChar(QChar::ParagraphSeparator) + "b"
+                         + QChar(0xfdd0) + "c" + QChar(0xfdd1) + "d";
+    const int id = tab.appendLine(line, Utils::StdOutFormat);
+
+    QCOMPARE(tab.document()->blockCount(), 2); // the line and the trailing empty block
+    QCOMPARE(tab.lines().size(), 1);
+    QCOMPARE(tab.lines().first().lineId, id);
+    QCOMPARE(tab.lines().first().text, QStringLiteral("a b c d"));
+}
+
 void tst_OutputTabWidget::lineIdAgeAcrossTheWrap()
 {
     QCOMPARE(lineIdAge(10, 7, 100), 3);

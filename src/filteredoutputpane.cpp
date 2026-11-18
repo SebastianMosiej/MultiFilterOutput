@@ -957,6 +957,10 @@ void FilteredOutputPane::replayAllIntoPatternTabs()
         entry.tab->setMaxLineLength(0);
     m_allTab->clearMatchStops();
     for (const OutputTabWidget::Line &line : m_allTab->lines()) {
+        // A block All never gave an id has no All line to jump back to; passing -1 on would
+        // make each pattern tab number it itself, colliding with All's ids.
+        if (line.lineId < 0)
+            continue;
         if (line.isNotice) {
             for (const PatternTab &entry : std::as_const(m_patternTabs)) {
                 entry.tab->appendLine(
