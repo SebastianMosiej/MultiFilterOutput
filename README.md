@@ -193,7 +193,8 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
 
 ## Requirements
 
-- **Qt Creator 21** (`21.0.0-beta1`, plugin API version `20.0.82`) or
+- **Qt Creator 21** (`21.0.x`, plugin API version `21.0.0`; the 21
+  pre-releases were `20.0.82`–`20.0.84`) or
   **Qt Creator 20** (`20.0.x`, plugin API version `20.0.0`). Build against
   the version you will run it in: out-of-tree plugins are tied to the exact
   `Core`/`ProjectExplorer`/`TextEditor` API version they compile against,
@@ -205,12 +206,17 @@ noisy `DEBUG` chatter, without losing the full unfiltered log.
   an end-user Qt Creator *installation* alone is not enough. Either:
   - a Qt Creator source/build tree of that version, or
   - the official development packages: `qtcreator.7z` and
-    `qtcreator_dev.7z` from `download.qt.io` (pre-releases live under
-    `snapshots/qtcreator/21.0/21.0.0-beta1/installer_source/latest/<platform>/`),
-    extracted into one directory. This is what CI builds against.
+    `qtcreator_dev.7z` from `download.qt.io`
+    (`official_releases/qtcreator/<major.minor>/<version>/installer_source/<platform>/`;
+    pre-releases live under `snapshots/`), extracted into one directory.
+    This is what CI builds against (from `snapshots/` while a version is not
+    officially released yet).
 - Qt 6 (Widgets module), matching the Qt version that Qt Creator was itself
-  built with — 6.11 for the official Qt Creator 21 packages, which also need
-  the `qttasktree` module (their `Utils` links `Qt6::TaskTree`).
+  built with (or an older 6.x that has every module it needs) — 6.12.1 for
+  the official Qt Creator 21 packages and 6.11.2 for Qt Creator 20. Both also
+  need the `qttasktree` module (their `Utils` links `Qt6::TaskTree`), which
+  Qt only ships from 6.11 on; a Qt Creator built from source against an
+  older Qt bundles its own copy.
 - CMake 3.22+ — the minimum Qt 6 itself accepts, and what the unit tests
   need (the `ENVIRONMENT_MODIFICATION` test property).
 - A C++20 compiler (tested with MSVC 2022 on Windows).
@@ -225,7 +231,9 @@ cmake -S <this-repo> -B <this-repo>\build -G "Visual Studio 17 2022" -DCMAKE_PRE
 cmake --build <this-repo>\build --config RelWithDebInfo
 ```
 
-The plugin DLL is produced under `build\lib\qtcreator\plugins\<config>\`.
+The plugin DLL is produced under `build\lib\qtcreator\plugins\<config>\`
+(directly under `build\lib\qtcreator\plugins\` with a single-config
+generator such as Ninja).
 To build the unit tests as well, add `-DWITH_TESTS=ON` to the configure
 step; run them with `ctest` from the build directory.
 
@@ -239,16 +247,48 @@ against).
 `.github/workflows/build.yml` builds the plugin and runs the unit tests on
 every push and pull request, on Windows (MSVC) and Linux (GCC), against the
 official Qt Creator development packages (`qt-creator/install-dev-package`)
-and Qt 6.11 (downloaded by `.github/scripts/download_qt.cmake`):
+and the Qt each of them is built with (downloaded by
+`.github/scripts/download_qt.cmake`):
 
-- **Qt Creator 21.0.0-beta1** — the version the plugin targets; must pass.
-  The built plugin is uploaded as an artifact.
-- **Qt Creator 22.0.0-beta1** — the next version, allowed to fail: an early
-  warning when Qt Creator's API changes under the plugin.
+- **Qt Creator 21.0.0** with Qt 6.12.1 — the version the plugin targets;
+  must pass.
+- **Qt Creator 20.0.2** with Qt 6.11.2 — the previous release; must pass.
+- **Qt Creator 22.0.0-beta1** with Qt 6.12.1 — the next version, allowed to
+  fail: an early warning when Qt Creator's API changes under the plugin.
 
-To move to a new Qt Creator version, update the `qtc` entries in the matrix,
-and `QT_VERSION` to whatever that Qt Creator is built with (see `QT_VERSION`
-in Qt Creator's own `.github/workflows/build_cmake.yml`).
+For 21 and 20 the plugin is packaged as
+`MultiFilterOutput-<version>-QtCreator<qtc>-<Windows|Linux>-x64.7z` (its
+`cmake --install` tree, the layout Qt Creator's extension manager installs)
+and uploaded as an artifact, together with the generated plugin metadata
+`.json`.
+
+To move to a new Qt Creator version, update the `qtc` entries in the matrix:
+`version`, and `qt` to whatever that Qt Creator is built with (see
+`QT_VERSION` in Qt Creator's own `.github/workflows/build_cmake.yml`).
+
+### Releasing
+
+1. Set `Version` (and `CompatVersion` if the release breaks settings or
+   API) in `MultiFilterOutput.json.in`.
+2. Push a tag `v<Version>`, e.g. `v0.1.0`, once every Qt Creator version
+   in the matrix marked `release: true` is in
+   `download.qt.io/official_releases`. CI refuses to release before that,
+   since it would otherwise build against a pre-release snapshot.
+3. CI checks the tag matches `Version`, builds and tests, builds the
+   shipped plugin again without the tests, and publishes a GitHub release
+   with the `.7z` archives, their `.json` metadata and `SHA256SUMS.txt`.
+4. To list the release in Qt Creator's extension manager, add or update
+   `registry/sebastianmosiej.multifilteroutput/extension.json` in a fork of
+   [qt-creator/extension-registry](https://github.com/qt-creator/extension-registry)
+   (start from `packaging/extension-registry/extension.json` here: fill in
+   the release URLs, then run the registry's `node scripts/fixhashes.js` on
+   it) and open a pull request there.
+
+   A registry version has one set of downloads and one Qt Creator
+   dependency, so the registry serves only the Qt Creator 21 build; the
+   Qt Creator 20 archives are on the GitHub release page only. Supporting
+   a later Qt Creator in the registry means a new plugin `Version` built
+   against it.
 
 ## Installing and enabling the plugin
 
@@ -259,12 +299,12 @@ plugin directory needs no write access to the Qt Creator installation and
 survives reinstalling it — on Windows:
 
 ```
-%LOCALAPPDATA%\QtProject\qtcreator\plugins\20.0.82\
+%LOCALAPPDATA%\QtProject\qtcreator\plugins\21.0.0\
 ```
 
-That last directory is named after the **plugin API version** (`20.0.82`),
-not the `21.0.0-beta1` display version; for Qt Creator 20.x it is
-`20.0.0`. Qt Creator scans
+That last directory is named after the **plugin API version** (`21.0.0`
+for Qt Creator 21.0.x; `20.0.82`–`20.0.84` for the 21 pre-releases; `20.0.0` for Qt Creator
+20.x), not the display version. Qt Creator scans
 `<major>.<minor>.<patch>` directories down to its own compatibility
 version. Alternatively, launch Qt Creator with `-pluginpath` pointed at the
 build output, which is what the `RunQtCreator` target does.

@@ -2,16 +2,15 @@ name: Build and test
 
 on:
   push:
+    branches: ['**']
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
 env:
-  # Qt Creator 20.0.1, 21 and 22 are all built with Qt 6.11 (see QT_VERSION in their own
-  # .github/workflows/build_cmake.yml). The plugin has to be built against that Qt (or an older
-  # 6.x), and the tests load Qt Creator's libraries, which need it at runtime.
-  QT_VERSION: 6.11.0
   CMAKE_VERSION: 3.30.3
   NINJA_VERSION: 1.12.1
+  PLUGIN_NAME: MultiFilterOutput
 
 defaults:
   run:
@@ -27,17 +26,29 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - { name: Windows MSVC, runner: windows-latest, platform: windows_x64 }
-          - { name: Linux GCC, runner: ubuntu-latest, platform: linux_x64 }
+          - { name: Windows MSVC, runner: windows-latest, platform: windows_x64, archive: Windows-x64 }
+          - { name: Linux GCC, runner: ubuntu-latest, platform: linux_x64, archive: Linux-x64 }
+        # qt: the Qt the official Qt Creator release is built with -- QT_VERSION in that
+        # branch's .github/workflows/build_cmake.yml (Qt's own CI pins the same minor in
+        # coin/product_dependencies.yaml). The plugin has to be built against that Qt (or an
+        # older 6.x that still provides every module Qt Creator's libraries link, e.g.
+        # Qt6::TaskTree from 6.11 on), and the tests load Qt Creator's libraries, which need
+        # it at runtime.
+        # Linux: the packages bundle Qt libraries (lib/Qt/lib) that were built against the Qt
+        # they were really released with, which can be a patch newer than build_cmake.yml says:
+        # 21.0.0 needs 6.12.1 (not 6.12.0) and 20.0.2 needs 6.11.2 (not 6.11.0). With an older
+        # Qt the tests fail to link, or to start, on undefined Qt_6_PRIVATE_API / Qt_6 symbols.
+        # The Windows build does not notice a mismatch.
+        # Until a version is in download.qt.io/official_releases, install-dev-package falls
+        # back to development_releases and then to snapshots -- so a release tag must only
+        # be pushed once the Qt Creator versions marked release: true are officially out.
         qtc:
-          # The version the plugin targets (plugin API 20.0.82) -- see README "Requirements".
-          # Pre-releases are only published under download.qt.io/snapshots, which
-          # install-dev-package falls back to.
-          - { version: 21.0.0-beta1, experimental: false }
-          # The current release (plugin API 20.0.0), supported too -- see src/qtccompat.h.
-          - { version: 20.0.1, experimental: false }
+          # The version the plugin targets -- see README "Requirements".
+          - { version: 21.0.0, qt: 6.12.1, experimental: false, release: true }
+          # The previous release (plugin API 20.0.0), supported too -- see src/qtccompat.h.
+          - { version: 20.0.2, qt: 6.11.2, experimental: false, release: true }
           # The next one, to catch Qt Creator API breaks before they land.
-          - { version: 22.0.0-beta1, experimental: true }
+          - { version: 22.0.0-beta1, qt: 6.12.1, experimental: true, release: false }
 
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +63,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libegl1 libxkbcommon0 libfontconfig1
+          sudo apt-get install -y libgl1-mesa-dev libegl1 libxkbcommon0 libfontconfig1 libsecret-1-0
 
       - name: Set up MSVC
         if: runner.os == 'Windows'
@@ -60,7 +71,7 @@ jobs:
 
       - name: Download Qt
         run: >
-          cmake -DQT_VERSION=${{ env.QT_VERSION }} -DPLATFORM=${{ matrix.os.platform }}
+          cmake -DQT_VERSION=${{ matrix.qtc.qt }} -DPLATFORM=${{ matrix.os.platform }}
           "-DDEST=${{ github.workspace }}/qt" -P .github/scripts/download_qt.cmake
 
       - name: Download Qt Creator
@@ -93,11 +104,83 @@ jobs:
             ${{ steps.qtc.outputs.path }}/lib/qtcreator:${{ steps.qtc.outputs.path }}/lib/qtcreator/plugins:${{ github.workspace }}/qt/lib
         run: ctest --test-dir build --output-on-failure
 
+      # install-dev-package quietly falls back to a pre-release snapshot while a version is
+      # not in official_releases yet; a release must not ship binaries built against one.
+      - name: Check Qt Creator is officially released
+        if: ${{ matrix.qtc.release && startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          qtc="${{ matrix.qtc.version }}"
+          url="https://download.qt.io/official_releases/qtcreator/${qtc%.*}/${qtc}/installer_source/${{ matrix.os.platform }}/qtcreator_dev.7z"
+          if ! curl -fsIL -o /dev/null "${url}"; then
+            echo "::error::Qt Creator ${qtc} is not officially released yet (${url} is missing); not releasing a build made against a snapshot"
+            exit 1
+          fi
+
+      # The shipped plugin is built separately, without WITH_TESTS (which adds test-only
+      # code, the source path and a Qt::Test dependency), like Qt Creator's
+      # scripts/build_plugin.py builds it.
+      - name: Build release plugin
+        if: ${{ matrix.qtc.release }}
+        run: |
+          cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            "-DCMAKE_PREFIX_PATH=${{ steps.qtc.outputs.path }};${{ github.workspace }}/qt"
+          cmake --build build-release
+
+      # The archive layout Qt Creator's extension manager installs from: the plugin's
+      # `cmake --install` tree (lib/qtcreator/plugins/...), packed from its root -- the same
+      # thing Qt Creator's scripts/build_plugin.py produces.
+      - name: Package
+        id: package
+        if: ${{ matrix.qtc.release }}
+        run: |
+          read_version='import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["Version"])'
+          version=$(python3 -c "${read_version}" "build-release/${PLUGIN_NAME}.json" 2>/dev/null \
+                    || python -c "${read_version}" "build-release/${PLUGIN_NAME}.json")
+          if [[ "${GITHUB_REF}" == refs/tags/v* && "${GITHUB_REF_NAME#v}" != "${version}" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match the plugin's Version ${version} (MultiFilterOutput.json.in)"
+            exit 1
+          fi
+          name="${PLUGIN_NAME}-${version}-QtCreator${{ matrix.qtc.version }}-${{ matrix.os.archive }}"
+          cmake --install build-release --prefix install --strip
+          (cd install && cmake -E tar cf "${GITHUB_WORKSPACE}/${name}.7z" --format=7zip .)
+          cp "build-release/${PLUGIN_NAME}.json" "${name}.json"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+
       - name: Upload plugin
-        if: ${{ !matrix.qtc.experimental }}
+        if: ${{ matrix.qtc.release }}
         uses: actions/upload-artifact@v4
         with:
-          name: MultiFilterOutput-qtc${{ matrix.qtc.version }}-${{ matrix.os.platform }}
+          name: ${{ steps.package.outputs.name }}
+          # The .json is the generated plugin metadata the extension-registry entry is made
+          # from (its scripts/new.js).
           path: |
-            build/lib/qtcreator/plugins/*MultiFilterOutput*
+            ${{ steps.package.outputs.name }}.7z
+            ${{ steps.package.outputs.name }}.json
           if-no-files-found: error
+
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd artifacts
+          sha256sum *.7z | tee SHA256SUMS.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/*.7z
+            artifacts/*.json
+            artifacts/SHA256SUMS.txt
+          fail_on_unmatched_files: true
