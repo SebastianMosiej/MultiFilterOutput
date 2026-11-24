@@ -51,7 +51,7 @@ jobs:
           - { version: 22.0.0-beta1, qt: 6.12.1, experimental: true, release: false }
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install CMake and Ninja
         uses: lukka/get-cmake@latest
@@ -148,7 +148,7 @@ jobs:
 
       - name: Upload plugin
         if: ${{ matrix.qtc.release }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.package.outputs.name }}
           # The .json is the generated plugin metadata the extension-registry entry is made
@@ -166,7 +166,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -177,7 +177,7 @@ jobs:
           sha256sum *.7z | tee SHA256SUMS.txt
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             artifacts/*.7z
