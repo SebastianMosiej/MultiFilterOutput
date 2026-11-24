@@ -1,8 +1,8 @@
 {
     "Id" : "multifilteroutput",
     "Name" : "MultiFilterOutput",
-    "Version" : "0.1.0",
-    "CompatVersion" : "0.1.0",
+    "Version" : "1.0.0",
+    "CompatVersion" : "1.0.0",
     "VendorId" : "sebastianmosiej",
     "Vendor" : "Sebastian Mosiej",
     "Copyright" : "(C) 2026 Sebastian Mosiej",

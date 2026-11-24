@@ -270,7 +270,7 @@ To move to a new Qt Creator version, update the `qtc` entries in the matrix:
 
 1. Set `Version` (and `CompatVersion` if the release breaks settings or
    API) in `MultiFilterOutput.json.in`.
-2. Push a tag `v<Version>`, e.g. `v0.1.0`, once every Qt Creator version
+2. Push a tag `v<Version>`, e.g. `v1.0.0`, once every Qt Creator version
    in the matrix marked `release: true` is in
    `download.qt.io/official_releases`. CI refuses to release before that,
    since it would otherwise build against a pre-release snapshot.

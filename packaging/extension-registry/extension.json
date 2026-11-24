@@ -7,12 +7,12 @@
         "display_vendor": "Sebastian Mosiej",
         "license": "open-source"
     },
-    "latest": "0.1.0",
+    "latest": "1.0.0",
     "versions": {
-        "0.1.0": {
+        "1.0.0": {
             "sources": [
                 {
-                    "url": "https://github.com/SebastianMosiej/MultiFilterOutput/releases/download/v0.1.0/MultiFilterOutput-0.1.0-QtCreator21.0.0-Windows-x64.7z",
+                    "url": "https://github.com/SebastianMosiej/MultiFilterOutput/releases/download/v1.0.0/MultiFilterOutput-1.0.0-QtCreator21.0.0-Windows-x64.7z",
                     "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
                     "platform": {
                         "name": "Windows",
@@ -20,7 +20,7 @@
                     }
                 },
                 {
-                    "url": "https://github.com/SebastianMosiej/MultiFilterOutput/releases/download/v0.1.0/MultiFilterOutput-0.1.0-QtCreator21.0.0-Linux-x64.7z",
+                    "url": "https://github.com/SebastianMosiej/MultiFilterOutput/releases/download/v1.0.0/MultiFilterOutput-1.0.0-QtCreator21.0.0-Linux-x64.7z",
                     "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
                     "platform": {
                         "name": "Linux",
@@ -31,8 +31,8 @@
             "metadata": {
                 "Id": "multifilteroutput",
                 "Name": "MultiFilterOutput",
-                "Version": "0.1.0",
-                "CompatVersion": "0.1.0",
+                "Version": "1.0.0",
+                "CompatVersion": "1.0.0",
                 "VendorId": "sebastianmosiej",
                 "Vendor": "Sebastian Mosiej",
                 "Copyright": "(C) 2026 Sebastian Mosiej",
